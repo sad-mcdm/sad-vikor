@@ -1,0 +1,298 @@
+{% extends 'base.html' %}
+
+{% block title %}Resultados — SAD Central{% endblock %}
+
+{% block content %}
+<div class="results-dashboard-wrapper">
+    <div class="results-header-actions no-print">
+        <div>
+            <h1 class="page-title"><i class="fa-solid fa-square-poll-vertical text-teal"></i> Dashboard de Resultados</h1>
+            <p class="page-subtitle">Analise a pontuação global e a ordenação final das alternativas calculadas pelo método **{{ problem.method|upper }}**.</p>
+        </div>
+        <div class="action-buttons-group">
+            <a href="{{ url_for('generate_results_pdf', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-file-pdf"></i> Exportar Relatório PDF</a>
+            <a href="{{ url_for('sensitivity_analysis', problem_id=problem.id) }}" class="btn btn-purple"><i class="fa-solid fa-dice"></i> Análise de Sensibilidade</a>
+        </div>
+    </div>
+    
+    <!-- Report Header (Visible only on print) -->
+    <div class="print-only-header">
+        <h1>Relatório de Apoio à Decisão Multicritério</h1>
+        <p>Problema: <strong>{{ problem.name }}</strong></p>
+        <p>Método Utilizado: <strong>{{ problem.method|upper }}</strong> | Data: <span id="print-date"></span></p>
+    </div>
+    
+    <!-- Winner Showcase (Visible only if Choice problematic) -->
+    {% if problem.problematic == 'choice' and winners %}
+        <div class="glass-card winner-showcase-card mt-3">
+            <div class="winner-icon-container"><i class="fa-solid fa-crown"></i></div>
+            <div class="winner-text-container">
+                <h3>Alternativa Recomendada</h3>
+                <p>Com base nos critérios e preferências fornecidos, a alternativa com o maior valor de utilidade global é:</p>
+                <div class="winner-name-badge">
+                    {% for w in winners %}
+                        <span>{{ w }}{% if not loop.last %}, {% endif %}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- ELECTRE Kernel Showcase -->
+    {% if problem.method == 'electre' and solver_res.get('extra', {}).get('kernel') %}
+        <div class="glass-card winner-showcase-card mt-3" style="border-left: 5px solid var(--purple);">
+            <div class="winner-icon-container text-purple" style="color: var(--purple);"><i class="fa-solid fa-circle-nodes"></i></div>
+            <div class="winner-text-container">
+                <h3>Núcleo de Alternativas (Kernel ELECTRE)</h3>
+                <p>As seguintes alternativas não são sobreclassificadas por nenhuma outra do núcleo, e sobreclassificam todas as de fora:</p>
+                <div class="winner-name-badge bg-purple-glow">
+                    {% for item in results %}
+                        {% if item.alternative.id in solver_res.extra.kernel %}
+                            <span class="badge bg-purple px-3 py-2 text-white m-1" style="background-color: var(--purple);">{{ item.alternative.name }}</span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- PROMETHEE V Portfolio Selection Showcase -->
+    {% if problem.method == 'promethee' and solver_res.get('extra', {}).get('selected_portfolio') %}
+        <div class="glass-card winner-showcase-card mt-3" style="border-left: 5px solid var(--teal);">
+            <div class="winner-icon-container text-teal"><i class="fa-solid fa-briefcase"></i></div>
+            <div class="winner-text-container">
+                <h3>Portfólio de Projetos Selecionado (PROMETHEE V)</h3>
+                <p>Projetos selecionados para investimento sob orçamento limite de <strong>{{ solver_res.extra.budget }}</strong>:</p>
+                <div class="winner-name-badge">
+                    {% for item in results %}
+                        {% if item.alternative.id in solver_res.extra.selected_portfolio %}
+                            <span class="badge bg-teal px-3 py-2 text-dark m-1" style="background-color: var(--teal); font-weight: bold;">{{ item.alternative.name }}</span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+    
+    <div class="results-layout-grid mt-4">
+        <!-- Ranks & Scores Table -->
+        <div class="glass-card flex-grow-2">
+            <h4>Ordenação das Alternativas</h4>
+            <div class="table-responsive mt-3">
+                <table class="results-table-main">
+                    <thead>
+                        <tr>
+                            <th>Classificação / Status</th>
+                            <th>Alternativa</th>
+                            <th>{% if problem.problematic == 'sorting' %}Categoria Alocada{% else %}Pontuação Global{% endif %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in results %}
+                            <tr class="{% if loop.first and problem.problematic == 'choice' %}winner-row{% endif %}">
+                                <td class="font-bold">
+                                    {% if problem.method == 'promethee' and solver_res.get('version') == 'V' %}
+                                        {% if item.rank == 1 %}
+                                            <span class="text-success"><i class="fa-solid fa-check-circle"></i> Selecionado</span>
+                                        {% else %}
+                                            <span class="text-muted"><i class="fa-solid fa-circle-minus"></i> Não Selecionado</span>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if item.rank == 1 %}
+                                            <i class="fa-solid fa-medal text-gold"></i> 1º Lugar
+                                        {% elif item.rank == 2 %}
+                                            <i class="fa-solid fa-medal text-silver"></i> 2º Lugar
+                                        {% elif item.rank == 3 %}
+                                            <i class="fa-solid fa-medal text-bronze"></i> 3º Lugar
+                                        {% else %}
+                                            {{ item.rank }}º Lugar
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                <td class="font-medium">{{ item.alternative.name }}</td>
+                                <td class="score-cell font-bold text-teal">
+                                    {% if problem.problematic == 'sorting' %}
+                                        Categoria {{ item.score|int }}
+                                    {% else %}
+                                        {{ item.score|round(4) }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Criteria Weights Panel -->
+        <div class="glass-card flex-grow-1">
+            <h4>Pesos dos Critérios</h4>
+            <div class="table-responsive mt-3">
+                <table class="weights-table-mini">
+                    <thead>
+                        <tr>
+                            <th>Critério</th>
+                            <th>Peso Calculado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for crit in criteria %}
+                            <tr>
+                                <td class="font-medium">{{ crit.name }}</td>
+                                <td class="font-bold text-purple">{{ (crit.weight * 100)|round(1) }}%</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Consistency display for AHP/BWM/BWT -->
+            {% if solver_res.get('criteria_cr') is not none %}
+                <div class="consistency-badge-card mt-3">
+                    <span class="consistency-title">Razão de Consistência (CR):</span>
+                    <span class="consistency-value font-bold {% if solver_res.criteria_cr < 0.10 %}text-success{% else %}text-warning{% endif %}">
+                        {{ (solver_res.criteria_cr * 100)|round(2) }}%
+                    </span>
+                    <p class="consistency-desc">
+                        {% if solver_res.criteria_cr < 0.10 %}
+                            <i class="fa-solid fa-check-circle text-success"></i> Seus julgamentos de importância são consistentes (abaixo de 10%).
+                        {% else %}
+                            <i class="fa-solid fa-exclamation-triangle text-warning"></i> Seus julgamentos possuem inconsistência leve (acima de 10%). Considere revisar.
+                        {% endif %}
+                    </p>
+                </div>
+            {% elif solver_res.get('consistency_xi') is not none %}
+                <div class="consistency-badge-card mt-3">
+                    <span class="consistency-title">Índice de Consistência (&xi;):</span>
+                    <span class="consistency-value font-bold text-teal">
+                        {{ solver_res.consistency_xi|round(4) }}
+                    </span>
+                    <p class="consistency-desc">Medida minimax de desvio de proporção. Quanto mais próximo de 0.0, mais coerentes as comparações.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- PROMETHEE I Incomparabilities -->
+    {% if problem.method == 'promethee' and solver_res.get('version') == 'I' and solver_res.get('extra', {}).get('relations') %}
+        <div class="glass-card mt-4">
+            <h4>Relações de Sobreclassificação Parcial (PROMETHEE I)</h4>
+            <p class="section-subtitle">Relações de preferência forte e incomparabilidades identificadas (onde as alternativas não podem ser comparadas de forma simples):</p>
+            <div class="table-responsive mt-3">
+                <table class="table table-dark border-teal">
+                    <thead>
+                        <tr>
+                            <th>Alternativa A</th>
+                            <th>Relação</th>
+                            <th>Alternativa B</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set ns = namespace(has_rel=false) %}
+                        {% for rel in solver_res.extra.relations %}
+                            {% if rel[2] == 'preferred' or rel[2] == 'incomparable' %}
+                            {% set ns.has_rel = true %}
+                            <tr>
+                                <td>
+                                    {% for item in results %}
+                                        {% if item.alternative.id == rel[0] %}<strong>{{ item.alternative.name }}</strong>{% endif %}
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% if rel[2] == 'preferred' %}
+                                        <span class="text-success font-bold"><i class="fa-solid fa-arrow-right"></i> Prefere sobre</span>
+                                    {% elif rel[2] == 'incomparable' %}
+                                        <span class="text-warning font-bold"><i class="fa-solid fa-circle-minus"></i> Incomparável com</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% for item in results %}
+                                        {% if item.alternative.id == rel[1] %}<strong>{{ item.alternative.name }}</strong>{% endif %}
+                                    {% endfor %}
+                                </td>
+                            </tr>
+                            {% endif %}
+                        {% endfor %}
+                        {% if not ns.has_rel %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">Nenhuma relação de preferência ou incomparabilidade estrita encontrada. Todas são indiferentes.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+    
+    <!-- Chart Section -->
+    <div class="glass-card mt-4 page-break-before">
+        <h4>Perfil de Utilidade/Classificação das Alternativas</h4>
+        <div class="chart-container-large mt-3">
+            <canvas id="scores-bar-chart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Print date
+    document.getElementById("print-date").innerText = new Date().toLocaleDateString('pt-BR');
+    
+    // Render Chart
+    const alternativesNames = [];
+    const globalScores = [];
+    
+    {% for item in results %}
+        alternativesNames.push("{{ item.alternative.name }}");
+        globalScores.push({{ item.score }});
+    {% endfor %}
+    
+    const ctx = document.getElementById('scores-bar-chart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: alternativesNames,
+            datasets: [{
+                label: 'Pontuação de Utilidade Global',
+                data: globalScores,
+                backgroundColor: 'rgba(0, 242, 195, 0.4)', // Royal Teal
+                borderColor: 'rgba(0, 242, 195, 1)',
+                borderWidth: 2,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: Math.max(...globalScores) <= 1.0 ? 1.0 : undefined,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)'
+                    },
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.6)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.6)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

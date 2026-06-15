@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block title %}Documentação — {{ config.SYSTEM_TITLE }}{% endblock %}
+
+{% block content %}
+<div class="evaluation-container">
+    <div class="evaluation-header">
+        <h1 class="page-title"><i class="fa-solid fa-book text-teal"></i> Central de Documentação</h1>
+        <p class="page-subtitle">Acesse os guias práticos de uso do sistema em português e inglês, ou consulte a especificação matemática para programadores.</p>
+    </div>
+    
+    <div class="evaluation-grid">
+        <!-- Sidebar Navigation -->
+        <div class="glass-card sidebar-panel-info col-md-3" style="max-height: 400px;">
+            <h4 class="font-bold text-teal mb-3"><i class="fa-solid fa-list-ol"></i> Tópicos</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button type="button" class="btn btn-outline w-100 text-left active-doc-tab" id="btn-guide-pt" onclick="showTab('guide-pt')">
+                    <i class="fa-solid fa-flag text-success"></i> Guia do Usuário (PT)
+                </button>
+                <button type="button" class="btn btn-outline w-100 text-left" id="btn-guide-en" onclick="showTab('guide-en')">
+                    <i class="fa-solid fa-flag text-primary"></i> User Guide (EN)
+                </button>
+            </div>
+            
+            <hr style="border-color: rgba(255,255,255,0.05); margin: 20px 0;">
+            
+            <h4 class="font-bold text-teal mb-2"><i class="fa-solid fa-download"></i> Downloads PDF</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <a href="{{ url_for('static', filename='docs/user_guide_pt.pdf') }}" class="btn btn-teal btn-sm" download>
+                    <i class="fa-solid fa-file-pdf"></i> Guia (PT)
+                </a>
+                <a href="{{ url_for('static', filename='docs/user_guide_en.pdf') }}" class="btn btn-teal btn-sm" download>
+                    <i class="fa-solid fa-file-pdf"></i> Guide (EN)
+                </a>
+            </div>
+        </div>
+        
+        <!-- Main Content Area -->
+        <div class="glass-card flex-grow-1" style="min-height: 500px;">
+            <!-- ──── GUIA DO USUÁRIO PORTUGUÊS ──── -->
+            <div id="tab-guide-pt" class="doc-tab-content">
+                <h2 class="section-title text-teal"><i class="fa-solid fa-book-open"></i> Guia do Usuário (Português)</h2>
+                <p class="section-subtitle">Instruções passo a passo para a utilização do sistema central e seus módulos.</p>
+                
+                <h4 class="mt-4 text-purple font-bold">1. Introdução</h4>
+                <p>O <strong>{{ config.SYSTEM_TITLE }}</strong> é um ecossistema projetado para estruturação e apoio na tomada de decisão multicritério. Ele permite carregar e organizar dados físicos complexos e elicitar pesos com consistência.</p>
+                
+                <h4 class="mt-4 text-purple font-bold">2. O Assistente de Decisão (Wizard)</h4>
+                <p>Para estruturar um problema de decisão, siga os seguintes passos:</p>
+                <ul class="mt-2" style="padding-left: 20px; line-height: 1.6;">
+                    <li><strong>Passo 1: Racionalidade:</strong> Selecione entre Racionalidade Compensatória (onde alternativas equilibram critérios, ex: TOPSIS) ou Não-Compensatória (onde há veto, ex: ELECTRE).</li>
+                    <li><strong>Passo 2: Problemática:</strong> Escolha Escolha (α), Ordenação (β), Classificação (γ) ou Portfólio (δ).</li>
+                    <li><strong>Passo 3: Seleção do Método:</strong> O sistema exibirá os métodos adequados para a racionalidade selecionada.</li>
+                    <li><strong>Passo 4: Matriz de Consequências:</strong> Preencha os valores físicos das consequências ou faça upload de uma planilha Excel/CSV utilizando o botão de importação.</li>
+                    <li><strong>Passo 5: Parâmetros e Pesos:</strong> Ajuste a escala de importância e limiares (se aplicável).</li>
+                </ul>
+                
+                <h4 class="mt-4 text-purple font-bold">3. Análise de Sensibilidade</h4>
+                <p>Acesse a simulação estocástica de Monte Carlo a partir da tela de resultados para quantificar a estabilidade do ranking sob incertezas estatísticas.</p>
+            </div>
+            
+            <!-- ──── USER GUIDE ENGLISH ──── -->
+            <div id="tab-guide-en" class="doc-tab-content" style="display: none;">
+                <h2 class="section-title text-teal"><i class="fa-solid fa-book-open"></i> User Guide (English)</h2>
+                <p class="section-subtitle">Step-by-step instructions to model and solve decision problems within the ecosystem.</p>
+                
+                <h4 class="mt-4 text-purple font-bold">1. Introduction</h4>
+                <p>The <strong>{{ config.SYSTEM_TITLE }}</strong> is a framework designed to structure and solve complex Multi-Criteria Decision-Making (MCDM) problems. It helps users manage physical criteria, alternatives, and weights consistently.</p>
+                
+                <h4 class="mt-4 text-purple font-bold">2. The Decision Wizard</h4>
+                <p>Follow these sequential steps to compile your decision model:</p>
+                <ul class="mt-2" style="padding-left: 20px; line-height: 1.6;">
+                    <li><strong>Step 1: Rationality:</strong> Select between Compensatory (AHP, TOPSIS, VIKOR) or Non-Compensatory (ELECTRE, PROMETHEE) rationality.</li>
+                    <li><strong>Step 2: Problematic:</strong> Define Choice (α), Ranking (β), Sorting (γ), or Portfolio (δ).</li>
+                    <li><strong>Step 3: Solver/Method Selection:</strong> Pick the specific mathematical solver.</li>
+                    <li><strong>Step 4: Consequence Matrix:</strong> Input performances or upload an Excel/CSV spreadsheet.</li>
+                    <li><strong>Step 5: Elicitation of Preferences:</strong> Configure weight scales, functions, and thresholds.</li>
+                </ul>
+                
+                <h4 class="mt-4 text-purple font-bold">3. Sensitivity Analysis</h4>
+                <p>Run the Monte Carlo simulator from the results screen to verify the probability of ranking stability under perturbed criteria weights.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .active-doc-tab {
+        background-color: var(--teal) !important;
+        color: var(--dark) !important;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function showTab(tabId) {
+        // Hide all tabs
+        document.querySelectorAll('.doc-tab-content').forEach(el => {
+            el.style.display = 'none';
+        });
+        // Show current tab
+        document.getElementById(`tab-${tabId}`).style.display = 'block';
+        
+        // Remove active class from buttons
+        document.getElementById('btn-guide-pt').classList.remove('active-doc-tab');
+        document.getElementById('btn-guide-en').classList.remove('active-doc-tab');
+        
+        // Add active class to clicked button
+        document.getElementById(`btn-${tabId}`).classList.add('active-doc-tab');
+    }
+</script>
+{% endblock %}

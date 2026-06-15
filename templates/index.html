@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+
+{% block title %}Bem-vindo ao {{ config.SYSTEM_TITLE }}{% endblock %}
+
+{% block content %}
+<section class="hero-section">
+    <div class="hero-content">
+        <h1 class="hero-title">Decisões Complexas. <br><span class="text-gradient">Estruturadas de Forma Simples.</span></h1>
+        
+        {% if config.SYSTEM_MODE == 'central' %}
+            <p class="hero-subtitle">Plataforma centralizada de apoio à decisão multicritério com modelagem matemática avançada e análise de sensibilidade via simulação estocástica.</p>
+        {% elif config.SYSTEM_MODE == 'smarts_smarter' %}
+            <p class="hero-subtitle">Plataforma de apoio à decisão baseada nos métodos SMARTS e SMARTER, fornecendo elicitação direta (Swing Weighting) ou por ranqueamento ordinal com pesos centróides (ROC).</p>
+        {% elif config.SYSTEM_MODE == 'ahp' %}
+            <p class="hero-subtitle">Plataforma de apoio à decisão baseada no consagrado Método AHP (Analytic Hierarchy Process), utilizando comparações par a par consistentes e escala de Saaty.</p>
+        {% elif config.SYSTEM_MODE == 'bwm' %}
+            <p class="hero-subtitle">Plataforma de apoio à decisão baseada no Método BWM (Best Worst Method), otimizando julgamentos par a par estruturados de atração via programação linear.</p>
+        {% elif config.SYSTEM_MODE == 'macbeth' %}
+            <p class="hero-subtitle">Plataforma de apoio à decisão baseada no Método MACBETH, gerando escalas cardinais puras a partir de julgamentos qualitativos semânticos resolvidos por programação linear.</p>
+        {% elif config.SYSTEM_MODE == 'bwt' %}
+            <p class="hero-subtitle">Plataforma de apoio à decisão baseada no Método BWT (Best Worst Tradeoff), utilizando taxas de substituição robustas resolvidas via PL e bisseção intra-critério.</p>
+        {% endif %}
+
+        <div class="hero-actions">
+            {% if session.get('user_id') %}
+                <a href="{{ url_for('dashboard') }}" class="btn btn-teal btn-lg"><i class="fa-solid fa-play"></i> Acessar Painel</a>
+            {% else %}
+                <a href="{{ url_for('register') }}" class="btn btn-teal btn-lg"><i class="fa-solid fa-user-plus"></i> Iniciar Agora</a>
+                <a href="{{ url_for('login') }}" class="btn btn-outline btn-lg">Entrar</a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="hero-visual">
+        <div class="glass-card visual-card">
+            <div class="card-header-accent">
+                <i class="fa-solid fa-brain"></i> {% if config.SYSTEM_MODE == 'central' %}MCDM SOLVER ENGINE{% else %}{{ config.SYSTEM_MODE|upper }} SOLVER ENGINE{% endif %}
+            </div>
+            <div class="visual-list">
+                {% if config.SYSTEM_MODE == 'central' %}
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> SMARTS / SMARTER</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> AHP (Saaty Scale)</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> MACBETH (Linear Optimization)</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Best Worst Method (BWM)</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Best Worst Tradeoff (BWT)</div>
+                {% elif config.SYSTEM_MODE == 'smarts_smarter' %}
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Método SMARTS (Swing Weighting)</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Método SMARTER (ROC Centroids)</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Funções de Valor Lineares</div>
+                {% elif config.SYSTEM_MODE == 'ahp' %}
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Julgamento Matricial Par a Par</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Escala de Importância de Saaty (1-9)</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Razão de Consistência (CR) automática</div>
+                {% elif config.SYSTEM_MODE == 'bwm' %}
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Vetores Best-to-Others (BO)</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Vetores Others-to-Worst (OW)</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Modelo de Otimização Linear Minimax</div>
+                {% elif config.SYSTEM_MODE == 'macbeth' %}
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Escala Qualitativa Semântica</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Níveis Cardinais de Atratividade</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Resolução via Programação Linear</div>
+                {% elif config.SYSTEM_MODE == 'bwt' %}
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Taxas Reais de Substituição</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Elicitação Intra-critério por Bisseção</div>
+                    <div class="visual-item"><i class="fa-solid fa-check text-teal"></i> Resolução Algorítmica e Linear</div>
+                {% endif %}
+                <div class="visual-item border-top"><i class="fa-solid fa-dice text-purple"></i> Monte Carlo Sensitivity</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="features-grid">
+    <div class="feature-card glass-card">
+        <div class="feature-icon"><i class="fa-solid fa-sliders"></i></div>
+        <h3>Elicitação Precisa</h3>
+        {% if config.SYSTEM_MODE == 'central' %}
+            <p>Apoio a múltiplos formatos de atração: pesos diretos, ranqueamento ordinal (ROC), comparação qualitativa MACBETH, e método da bisseção para funções de valor no BWT.</p>
+        {% elif config.SYSTEM_MODE == 'smarts_smarter' %}
+            <p>Defina o peso dos seus critérios informando notas diretas (0 a 100) baseadas em Swings ou simplesmente ordene a importância para obter pesos ótimos via ROC.</p>
+        {% elif config.SYSTEM_MODE == 'ahp' %}
+            <p>Compare os critérios par a par usando a escala padrão de Saaty de 1 a 9, gerando o autovetor principal pelo método da média geométrica normalizada.</p>
+        {% elif config.SYSTEM_MODE == 'bwm' %}
+            <p>Identifique o melhor e o pior critério, e faça apenas 2n-3 comparações par a par, otimizando o esforço cognitivo do decisor.</p>
+        {% elif config.SYSTEM_MODE == 'macbeth' %}
+            <p>Elicite atratividade usando categorias semânticas (nula, muito fraca, fraca, moderada, forte, muito forte, extrema) resolvidas matematicamente via PL.</p>
+        {% elif config.SYSTEM_MODE == 'bwt' %}
+            <p>Trabalhe com trocas compensatórias exatas (tradeoffs) entre o melhor critério e os demais, estimando as curvas de utilidade via bisseções sucessivas.</p>
+        {% endif %}
+    </div>
+    
+    <div class="feature-card glass-card">
+        <div class="feature-icon"><i class="fa-solid fa-chart-line"></i></div>
+        <h3>Simulação Monte Carlo</h3>
+        <p>Avalie a robustez da sua solução. Perturbe as consequências e descubra a real probabilidade de estabilidade do ranking final frente a incertezas nos dados.</p>
+    </div>
+    
+    <div class="feature-card glass-card">
+        <div class="feature-icon"><i class="fa-solid fa-file-import"></i></div>
+        <h3>Flexibilidade de Arquivos</h3>
+        <p>Importe matrizes de consequência diretamente em CSV ou Excel (XLSX) de forma dinâmica e exporte relatórios consolidados em formato PDF vetorial limpo.</p>
+    </div>
+</section>
+{% endblock %}
+

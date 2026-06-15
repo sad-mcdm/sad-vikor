@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard — SAD Central{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1 class="page-title">Painel de Decisões</h1>
+        <p class="page-subtitle">Monitore, edite ou crie novos problemas de apoio à decisão multicritério.</p>
+    </div>
+    <div>
+        <button class="btn btn-teal" onclick="document.getElementById('new-problem-modal').classList.add('active')">
+            <i class="fa-solid fa-plus-circle"></i> Novo Problema
+        </button>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <!-- List of saved problems -->
+    {% if problems %}
+        {% for problem in problems %}
+            <div class="glass-card problem-card">
+                <div class="problem-card-header">
+                    <h3 class="problem-name">{{ problem.name }}</h3>
+                    <div class="problem-badge badge-teal">{{ problem.method|upper }}</div>
+                </div>
+                <p class="problem-desc">
+                    {% if problem.description %}
+                        {{ problem.description }}
+                    {% else %}
+                        Sem descrição informada para este problema de decisão.
+                    {% endif %}
+                </p>
+                <div class="problem-meta">
+                    <span><i class="fa-solid fa-scale-balanced"></i> Racionalidade: {{ 'Compensatória' if problem.rationality == 'compensatory' else 'Não-compensatória' }}</span>
+                    <span><i class="fa-solid fa-bullseye"></i> Problemática: {{ problem.problematic|capitalize }}</span>
+                </div>
+                
+                <div class="problem-card-actions">
+                    <div class="action-left">
+                        <a href="{{ url_for('consequence_matrix', problem_id=problem.id) }}" class="btn btn-sm btn-outline"><i class="fa-solid fa-edit"></i> Retomar</a>
+                        <a href="{{ url_for('view_results', problem_id=problem.id) }}" class="btn btn-sm btn-teal"><i class="fa-solid fa-square-poll-vertical"></i> Resultados</a>
+                    </div>
+                    <div class="action-right">
+                        <form action="{{ url_for('delete_problem', problem_id=problem.id) }}" method="POST" onsubmit="return confirm('Deseja realmente excluir este problema? Todos os dados serão perdidos.')">
+                            <button type="submit" class="btn-delete-icon" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="glass-card empty-dashboard">
+            <div class="empty-icon"><i class="fa-solid fa-folder-open"></i></div>
+            <h3>Nenhum problema cadastrado</h3>
+            <p>Comece criando seu primeiro problema multicritério para configurar critérios, alternativas e obter os resultados.</p>
+            <button class="btn btn-teal" onclick="document.getElementById('new-problem-modal').classList.add('active')">
+                <i class="fa-solid fa-plus-circle"></i> Criar Meu Primeiro Problema
+            </button>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Modal: New Problem -->
+<div id="new-problem-modal" class="modal-overlay">
+    <div class="glass-card modal-card">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-plus-circle text-teal"></i> Novo Problema de Decisão</h3>
+            <button class="modal-close" onclick="document.getElementById('new-problem-modal').classList.remove('active')">&times;</button>
+        </div>
+        <form action="{{ url_for('create_problem') }}" method="POST" class="modal-form">
+            <div class="form-group">
+                <label for="name">Nome do Problema</label>
+                <input type="text" id="name" name="name" required placeholder="Exemplo: Escolha de Fornecedor de TI">
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Descrição / Detalhamento (Opcional)</label>
+                <textarea id="description" name="description" rows="3" placeholder="Descreva brevemente o contexto da decisão..."></textarea>
+            </div>
+            
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('new-problem-modal').classList.remove('active')">Cancelar</button>
+                <button type="submit" class="btn btn-teal">Continuar <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

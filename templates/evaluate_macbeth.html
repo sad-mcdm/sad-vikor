@@ -1,0 +1,337 @@
+{% extends 'base.html' %}
+
+{% block title %}Avaliação MACBETH — SAD Central{% endblock %}
+
+{% block content %}
+<div class="evaluation-container">
+    <div class="evaluation-header">
+        <h1 class="page-title"><i class="fa-solid fa-list-check text-teal"></i> Elicitação de Preferências MACBETH</h1>
+        <p class="page-subtitle">Forneça julgamentos semânticos (qualitativos) para expressar as diferenças de atratividade entre critérios e níveis de escala.</p>
+    </div>
+    
+    <!-- Tab Controls -->
+    <div class="tab-controls mt-4">
+        <button type="button" class="tab-btn active" onclick="switchTab('criteria-tab')"><i class="fa-solid fa-list"></i> Diferença entre Critérios</button>
+        <button type="button" class="tab-btn" onclick="switchTab('levels-tab')"><i class="fa-solid fa-layer-group"></i> Curvas de Valor (Níveis)</button>
+    </div>
+    
+    <!-- Tab 1: Criteria Pairwise comparisons -->
+    <div id="criteria-tab" class="tab-content active">
+        <div class="glass-card mt-3">
+            <h3>Diferença de Atratividade dos Critérios</h3>
+            <p class="section-subtitle">Para cada par de critérios, selecione qual é mais atrativo (mais importante) e qual é a categoria de diferença qualitativa.</p>
+            
+            <div class="pairwise-questions-list mt-4" id="criteria-questions-container">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tab 2: Levels Pairwise comparisons -->
+    <div id="levels-tab" class="tab-content">
+        <div class="glass-card mt-3">
+            <div class="flex-between-header">
+                <div>
+                    <h3>Julgamento de Diferença entre Níveis de Escala</h3>
+                    <p class="section-subtitle">Selecione o critério para comparar a diferença de atratividade entre as faixas de valores da escala.</p>
+                </div>
+                <div class="criteria-dropdown-container">
+                    <label for="active-criterion-select">Critério Ativo: </label>
+                    <select id="active-criterion-select" onchange="renderLevelsQuestions(this.value)">
+                        <!-- Injected via JS -->
+                    </select>
+                </div>
+            </div>
+            
+            <div class="pairwise-questions-list mt-4" id="levels-questions-container">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="wizard-actions mt-4">
+        <a href="{{ url_for('consequence_matrix', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+        <button type="button" class="btn btn-teal" onclick="submitMacbeth()"><i class="fa-solid fa-square-poll-vertical"></i> Calcular e Ver Resultados</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const criteria = [];
+    {% for crit in criteria %}
+        criteria.push({ id: {{ crit.id }}, name: "{{ crit.name }}", type: "{{ crit.criteria_type }}" });
+    {% endfor %}
+    
+    const savedPrefs = {{ problem.preferences|tojson }} || {};
+    
+    // 1. Initialize Criteria comparison matrix
+    let criteriaMatrix = savedPrefs.criteria_matrix || Array(criteria.length).fill().map(() => Array(criteria.length).fill(1.0));
+    
+    // 2. Initialize Levels comparison matrices
+    let levelsMatrices = savedPrefs.levels_matrices || {};
+    
+    // MACBETH qualitative choices
+    const macbethOptions = [
+        { value: 0, label: "Nula" },
+        { value: 1, label: "Muito Fraca" },
+        { value: 2, label: "Fraca" },
+        { value: 3, label: "Moderada" },
+        { value: 4, label: "Forte" },
+        { value: 5, label: "Muito Forte" },
+        { value: 6, label: "Extrema" }
+    ];
+    
+    function switchTab(tabId) {
+        document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+        document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
+        
+        document.getElementById(tabId).classList.add("active");
+        event.currentTarget.classList.add("active");
+    }
+    
+    // Render criteria questions
+    function renderCriteriaQuestions() {
+        const container = document.getElementById("criteria-questions-container");
+        container.innerHTML = "";
+        
+        let questionCount = 0;
+        for (let i = 0; i < criteria.length; i++) {
+            for (let j = i + 1; j < criteria.length; j++) {
+                questionCount++;
+                const savedVal = criteriaMatrix[i][j];
+                
+                let preferred = i;
+                let difference = savedVal;
+                if (savedVal < 0) {
+                    preferred = j;
+                    difference = -savedVal;
+                }
+                
+                const qRow = document.createElement("div");
+                qRow.className = "pairwise-question-card";
+                qRow.innerHTML = `
+                    <div class="question-title">Comparação ${questionCount}: <strong>${criteria[i].name}</strong> vs <strong>${criteria[j].name}</strong></div>
+                    <div class="comparison-ui">
+                        <div class="prefer-selection">
+                            <label>Mais atrativo:</label>
+                            <div class="btn-group-toggle">
+                                <button type="button" class="btn-toggle ${preferred === i ? 'active' : ''}" onclick="setCriteriaPreferred(${i}, ${j}, ${i}, this)">${criteria[i].name}</button>
+                                <button type="button" class="btn-toggle ${preferred === j ? 'active' : ''}" onclick="setCriteriaPreferred(${i}, ${j}, ${j}, this)">${criteria[j].name}</button>
+                            </div>
+                        </div>
+                        <div class="intensity-selection">
+                            <label>Diferença qualitativa:</label>
+                            <select class="form-select-sm" onchange="setCriteriaDifference(${i}, ${j}, this.value)">
+                                ${macbethOptions.map(opt => `<option value="${opt.value}" ${Math.abs(difference - opt.value) < 0.1 ? 'selected' : ''}>${opt.label}</option>`).join("")}
+                            </select>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(qRow);
+            }
+        }
+    }
+    
+    function setCriteriaPreferred(i, j, prefIdx, btn) {
+        const btns = btn.parentElement.querySelectorAll(".btn-toggle");
+        btns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        
+        const currentDiff = Math.abs(criteriaMatrix[i][j]);
+        if (prefIdx === i) {
+            criteriaMatrix[i][j] = currentDiff;
+            criteriaMatrix[j][i] = -currentDiff;
+        } else {
+            criteriaMatrix[i][j] = -currentDiff;
+            criteriaMatrix[j][i] = currentDiff;
+        }
+    }
+    
+    function setCriteriaDifference(i, j, diff) {
+        const value = parseInt(diff);
+        const isPreferredI = criteriaMatrix[i][j] >= 0;
+        
+        if (isPreferredI) {
+            criteriaMatrix[i][j] = value;
+            criteriaMatrix[j][i] = -value;
+        } else {
+            criteriaMatrix[i][j] = -value;
+            criteriaMatrix[j][i] = value;
+        }
+    }
+    
+    // Render level comparison questions for a specific Criterion
+    // 5 scale levels: L_0, L_1, L_2, L_3, L_4
+    function renderLevelsQuestions(critIndex) {
+        const critId = criteria[critIndex].id;
+        const cidStr = critId.toString();
+        const container = document.getElementById("levels-questions-container");
+        container.innerHTML = "";
+        
+        // Initialize levels matrix if not present (5 levels)
+        if (!levelsMatrices[cidStr]) {
+            const matrix = Array(5).fill().map(() => Array(5).fill(0.0));
+            const isBenefit = (criteria[critIndex].type === 'benefit');
+            
+            for (let r = 0; r < 5; r++) {
+                for (let c = 0; c < 5; c++) {
+                    if (r === c) {
+                        matrix[r][c] = 0;
+                    } else if (r > c) {
+                        // r is a higher index, so for benefit it's preferred.
+                        // Pre-fill with consistent linear mapping:
+                        const dist = r - c;
+                        let diff = 0;
+                        if (dist === 1) diff = 2; // Weak
+                        else if (dist === 2) diff = 4; // Strong
+                        else if (dist === 3) diff = 5; // Very Strong
+                        else if (dist === 4) diff = 6; // Extreme
+                        
+                        if (isBenefit) {
+                            matrix[r][c] = diff;
+                            matrix[c][r] = -diff;
+                        } else {
+                            matrix[r][c] = -diff;
+                            matrix[c][r] = diff;
+                        }
+                    }
+                }
+            }
+            levelsMatrices[cidStr] = matrix;
+        }
+        
+        const levelsMatrix = levelsMatrices[cidStr];
+        let questionCount = 0;
+        const isBenefit = (criteria[critIndex].type === 'benefit');
+        
+        // Render 10 questions for 5 levels (L_0 to L_4)
+        for (let i = 0; i < 5; i++) {
+            for (let j = i + 1; j < 5; j++) {
+                questionCount++;
+                const savedVal = levelsMatrix[i][j];
+                
+                let preferred = i;
+                let difference = savedVal;
+                if (savedVal < 0) {
+                    preferred = j;
+                    difference = -savedVal;
+                }
+                
+                const labelI = `Nível ${i + 1}`;
+                const labelJ = `Nível ${j + 1}`;
+                
+                const qRow = document.createElement("div");
+                qRow.className = "pairwise-question-card";
+                qRow.innerHTML = `
+                    <div class="question-title">Comparação ${questionCount}: <strong>${labelI}</strong> vs <strong>${labelJ}</strong></div>
+                    <div class="comparison-ui">
+                        <div class="prefer-selection">
+                            <label>Mais atrativo:</label>
+                            <div class="btn-group-toggle">
+                                <button type="button" class="btn-toggle ${preferred === i ? 'active' : ''}" onclick="setLevelPreferred(${critId}, ${i}, ${j}, ${i}, this)">${labelI}</button>
+                                <button type="button" class="btn-toggle ${preferred === j ? 'active' : ''}" onclick="setLevelPreferred(${critId}, ${i}, ${j}, ${j}, this)">${labelJ}</button>
+                            </div>
+                        </div>
+                        <div class="intensity-selection">
+                            <label>Diferença qualitativa:</label>
+                            <select class="form-select-sm" onchange="setLevelDifference(${critId}, ${i}, ${j}, this.value)">
+                                ${macbethOptions.map(opt => `<option value="${opt.value}" ${Math.abs(difference - opt.value) < 0.1 ? 'selected' : ''}>${opt.label}</option>`).join("")}
+                            </select>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(qRow);
+            }
+        }
+    }
+    
+    function setLevelPreferred(critId, i, j, prefIdx, btn) {
+        const btns = btn.parentElement.querySelectorAll(".btn-toggle");
+        btns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        
+        const matrix = levelsMatrices[critId.toString()];
+        const currentDiff = Math.abs(matrix[i][j]);
+        
+        if (prefIdx === i) {
+            matrix[i][j] = currentDiff;
+            matrix[j][i] = -currentDiff;
+        } else {
+            matrix[i][j] = -currentDiff;
+            matrix[j][i] = currentDiff;
+        }
+    }
+    
+    function setLevelDifference(critId, i, j, diff) {
+        const value = parseInt(diff);
+        const matrix = levelsMatrices[critId.toString()];
+        const isPreferredI = matrix[i][j] >= 0;
+        
+        if (isPreferredI) {
+            matrix[i][j] = value;
+            matrix[j][i] = -value;
+        } else {
+            matrix[i][j] = -value;
+            matrix[j][i] = value;
+        }
+    }
+    
+    // Initialize UI
+    function initMacbethUi() {
+        renderCriteriaQuestions();
+        
+        const select = document.getElementById("active-criterion-select");
+        select.innerHTML = "";
+        criteria.forEach((crit, idx) => {
+            const opt = document.createElement("option");
+            opt.value = idx;
+            opt.innerText = crit.name;
+            select.appendChild(opt);
+        });
+        
+        if (criteria.length > 0) {
+            renderLevelsQuestions(0);
+        }
+    }
+    
+    // Submit
+    function submitMacbeth() {
+        const payload = {
+            criteria_matrix: criteriaMatrix,
+            levels_matrices: levelsMatrices
+        };
+        
+        const saveBtn = document.querySelector(".wizard-actions button.btn-teal");
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Otimizando...`;
+        saveBtn.disabled = true;
+        
+        fetch("{{ url_for('evaluate_method', problem_id=problem.id) }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.href = res.redirect;
+            } else {
+                alert("Erro ao calcular (provável inconsistência qualitativa): " + res.message);
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            }
+        })
+        .catch(err => {
+            alert("Erro na conexão ao enviar preferências MACBETH.");
+            console.error(err);
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        });
+    }
+    
+    window.onload = initMacbethUi;
+</script>
+{% endblock %}

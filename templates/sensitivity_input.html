@@ -1,0 +1,290 @@
+{% extends 'base.html' %}
+
+{% block title %}Análise de Sensibilidade — SAD Central{% endblock %}
+
+{% block content %}
+<div class="evaluation-container">
+    <div class="evaluation-header">
+        <h1 class="page-title"><i class="fa-solid fa-dice text-teal"></i> Análise de Sensibilidade (Monte Carlo)</h1>
+        <p class="page-subtitle">Configure as margens de erro (perturbação) das consequências e execute a simulação para analisar a estabilidade da recomendação.</p>
+    </div>
+    
+    <div class="evaluation-grid">
+        <!-- Settings Form -->
+        <div class="glass-card flex-grow-1">
+            <h3 class="section-title">Parâmetros da Simulação</h3>
+            <p class="section-subtitle">Defina o número de interações e a perturbação máxima tolerada para cada critério (como percentual da amplitude máxima-mínima).</p>
+            
+            <form id="sensitivity-form" class="mt-4">
+                <div class="form-group">
+                    <label for="num_simulations" class="font-bold text-teal">Número de Simulações:</label>
+                    <select id="num_simulations" name="num_simulations" class="form-select-lg">
+                        <option value="1000">1.000 Iterações (Rápido)</option>
+                        <option value="5000">5.000 Iterações</option>
+                        <option value="10000" selected>10.000 Iterações (Recomendado)</option>
+                        <option value="20000">20.000 Iterações (Alta Cobertura)</option>
+                    </select>
+                </div>
+                
+                <h4 class="mt-4">Perturbação por Critério (%)</h4>
+                <div class="sliders-list mt-3">
+                    {% for crit in criteria %}
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-name font-bold">{{ crit.name }}</span>
+                                <span class="slider-type">(${'Benefício' if crit.criteria_type == 'benefit' else 'Custo'})</span>
+                            </div>
+                            <div class="slider-control">
+                                <input type="range" class="form-range" min="0" max="50" value="10" name="variation_{{ crit.id }}" id="variation_{{ crit.id }}" oninput="updateRangeVal({{ crit.id }}, this.value)">
+                                <span class="range-display-badge" id="badge_{{ crit.id }}">10%</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="evaluation-actions mt-5">
+                    <a href="{{ url_for('view_results', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar aos Resultados</a>
+                    <button type="button" class="btn btn-purple" id="run-sim-btn" onclick="runSimulation()"><i class="fa-solid fa-dice"></i> Executar Simulação</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Info Panel -->
+        <div class="glass-card sidebar-panel-info">
+            <h4>O que é a simulação estocástica?</h4>
+            <p>O simulador adiciona ruído uniforme U(-&Delta;<sub>j</sub>, &Delta;<sub>j</sub>) aos valores da matriz de consequências físicas a cada rodada, recalculando a função de valor do método **{{ problem.method|upper }}**.</p>
+            <p>Isso permite mensurar de forma estatística se pequenas alterações nos dados do problema alterariam a classificação final das alternativas.</p>
+        </div>
+    </div>
+    
+    <!-- Simulation Results Dashboard (Visible after run) -->
+    <div id="sim-results-dashboard" class="mt-5" style="display: none;">
+        <hr class="section-divider">
+        <h2 class="wizard-title mt-4"><i class="fa-solid fa-square-poll-vertical text-purple"></i> Estatísticas de Estabilidade</h2>
+        
+        <div class="results-layout-grid mt-4">
+            <!-- First Place Probabilities Card -->
+            <div class="glass-card flex-grow-1">
+                <h4>Probabilidade de Ficar em 1º Lugar</h4>
+                <p class="section-subtitle">Porcentagem das simulações em que a alternativa obteve a melhor pontuação global.</p>
+                <div class="chart-container-medium mt-3">
+                    <canvas id="first-place-chart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Average Rank Table -->
+            <div class="glass-card flex-grow-1">
+                <h4>Ranking Médio e Estatísticas</h4>
+                <p class="section-subtitle">Resumo estatístico consolidado após todas as iterações.</p>
+                <div class="table-responsive mt-3">
+                    <table class="results-table-main" id="sim-stats-table">
+                        <thead>
+                            <tr>
+                                <th>Alternativa</th>
+                                <th>Score Médio</th>
+                                <th>Rank Médio</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sim-stats-table-body">
+                            <!-- Injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Stacked Rank Stability Chart -->
+        <div class="glass-card mt-4">
+            <h4>Estabilidade de Ranking (Frequência por Posição)</h4>
+            <p class="section-subtitle">Como as posições das alternativas se distribuíram ao longo de todas as simulações (1º Lugar ao último).</p>
+            <div class="chart-container-large mt-3">
+                <canvas id="rank-stability-chart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    function updateRangeVal(id, val) {
+        document.getElementById(`badge_${id}`).innerText = `${val}%`;
+    }
+    
+    let firstPlaceChart = null;
+    let rankStabilityChart = null;
+    
+    function runSimulation() {
+        const simBtn = document.getElementById("run-sim-btn");
+        const originalText = simBtn.innerHTML;
+        simBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Simulando...`;
+        simBtn.disabled = true;
+        
+        // Build FormData to submit
+        const form = document.getElementById("sensitivity-form");
+        const formData = new FormData(form);
+        
+        fetch("{{ url_for('sensitivity_analysis', problem_id=problem.id) }}", {
+            method: "POST",
+            body: formData
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                renderSimulationResults(res.data);
+                document.getElementById("sim-results-dashboard").style.display = "block";
+                // Smooth scroll to results
+                document.getElementById("sim-results-dashboard").scrollIntoView({ behavior: 'smooth' });
+            } else {
+                alert("Erro na simulação: " + res.message);
+            }
+        })
+        .catch(err => {
+            alert("Erro na conexão durante a simulação.");
+            console.error(err);
+        })
+        .finally(() => {
+            simBtn.innerHTML = originalText;
+            simBtn.disabled = false;
+        });
+    }
+    
+    function renderSimulationResults(data) {
+        const alts = data.alternatives;
+        const avgScores = data.average_scores;
+        const avgRanks = data.average_ranks;
+        const firstPlaceProbs = data.first_place_probabilities;
+        const rankProbs = data.rank_probabilities; // matrix size: num_alts x num_alts
+        
+        // 1. Render Table
+        const tbody = document.getElementById("sim-stats-table-body");
+        tbody.innerHTML = "";
+        
+        // Pair data and sort by average rank
+        const tableData = alts.map((name, idx) => ({
+            name: name,
+            score: avgScores[idx],
+            rank: avgRanks[idx]
+        })).sort((a, b) => a.rank - b.rank);
+        
+        tableData.forEach(row => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td class="font-bold">${row.name}</td>
+                <td class="text-teal font-bold">${row.score.toFixed(4)}</td>
+                <td class="text-purple font-bold">${row.rank.toFixed(2)}º</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        // 2. Render First Place Chart (Horizontal Bar Chart)
+        if (firstPlaceChart) firstPlaceChart.destroy();
+        
+        const ctxFirst = document.getElementById("first-place-chart").getContext("2d");
+        firstPlaceChart = new Chart(ctxFirst, {
+            type: 'bar',
+            data: {
+                labels: alts,
+                datasets: [{
+                    label: 'Probabilidade de 1º Lugar',
+                    data: firstPlaceProbs,
+                    backgroundColor: 'rgba(0, 242, 195, 0.5)',
+                    borderColor: 'rgba(0, 242, 195, 1)',
+                    borderWidth: 1.5,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: 1.0,
+                        ticks: {
+                            callback: value => `${(value * 100).toFixed(0)}%`,
+                            color: 'rgba(255, 255, 255, 0.6)'
+                        },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                    },
+                    y: {
+                        ticks: { color: 'rgba(255, 255, 255, 0.6)' },
+                        grid: { display: false }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+        
+        // 3. Render Stacked Rank Stability Chart
+        if (rankStabilityChart) rankStabilityChart.destroy();
+        
+        // Build datasets: one dataset per rank position (1º Lugar, 2º Lugar, etc.)
+        const numAlts = alts.length;
+        const datasets = [];
+        const colors = [
+            'rgba(0, 242, 195, 0.6)',    // Royal Teal (1st place)
+            'rgba(141, 75, 255, 0.6)',   // Amethyst Purple (2nd place)
+            'rgba(54, 162, 235, 0.6)',   // Blue (3rd)
+            'rgba(255, 206, 86, 0.6)',   // Yellow
+            'rgba(255, 99, 132, 0.6)',   // Red
+            'rgba(75, 192, 192, 0.6)',   // Muted Green
+            'rgba(153, 102, 255, 0.6)'   // Muted Purple
+        ];
+        
+        for (let r = 0; r < numAlts; r++) {
+            const dataForRank = [];
+            for (let i = 0; i < numAlts; i++) {
+                dataForRank.push(rankProbs[i][r]);
+            }
+            
+            datasets.push({
+                label: `${r + 1}º Lugar`,
+                data: dataForRank,
+                backgroundColor: colors[r % colors.length],
+                borderWidth: 0
+            });
+        }
+        
+        const ctxStable = document.getElementById("rank-stability-chart").getContext("2d");
+        rankStabilityChart = new Chart(ctxStable, {
+            type: 'bar',
+            data: {
+                labels: alts,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        stacked: true,
+                        ticks: { color: 'rgba(255, 255, 255, 0.6)' },
+                        grid: { display: false }
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        max: 1.0,
+                        ticks: {
+                            callback: value => `${(value * 100).toFixed(0)}%`,
+                            color: 'rgba(255, 255, 255, 0.6)'
+                        },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: 'rgba(255, 255, 255, 0.8)' }
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+
+{% block title %}Avaliação SMARTER — SAD Central{% endblock %}
+
+{% block content %}
+<div class="evaluation-container">
+    <div class="evaluation-header">
+        <h1 class="page-title"><i class="fa-solid fa-list-ol text-teal"></i> Ordenação de Critérios (SMARTER)</h1>
+        <p class="page-subtitle">Ordene os critérios do mais importante (topo) ao menos importante (base). Os pesos centróides ROC serão calculados automaticamente.</p>
+    </div>
+    
+    <div class="evaluation-grid">
+        <!-- Ranks Elicitation Form -->
+        <div class="glass-card flex-grow-1">
+            <h3 class="section-title">Hierarquia de Importância</h3>
+            <p class="section-subtitle">Utilize as setas para mover os critérios para cima ou para baixo, definindo sua ordem de preferência absoluta.</p>
+            
+            <div class="ranking-sort-container mt-4" id="criteria-sort-list">
+                <!-- Sorted items will be rendered dynamically by JavaScript -->
+            </div>
+            
+            <div class="evaluation-actions mt-5">
+                <a href="{{ url_for('consequence_matrix', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+                <button type="button" class="btn btn-teal" onclick="submitSmarter()"><i class="fa-solid fa-square-poll-vertical"></i> Calcular e Ver Resultados</button>
+            </div>
+        </div>
+        
+        <!-- Side Panel: Info -->
+        <div class="glass-card sidebar-panel-info">
+            <h4>Pesos ROC (Rank-Order Centroid)</h4>
+            <p>O método **SMARTER** utiliza a fórmula de centroides para extrair pesos a partir de ordenações estritas:</p>
+            <p class="formula-box" style="font-family: 'Courier New', monospace; font-size: 1.1rem; text-align: center; margin: 15px 0; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05); color: var(--teal);">
+                w<sub>j</sub> = (1 / n) * &sum;<sub>(k = r<sub>j</sub> to n)</sub> (1 / k)
+            </p>
+            <p>Isso reduz drasticamente a inconsistência subjetiva do tomador de decisão, fornecendo pesos matematicamente equilibrados baseados na teoria dos jogos e probabilidade.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Load criteria list from backend
+    let criteria = [];
+    {% for crit in criteria %}
+        criteria.push({ id: {{ crit.id }}, name: "{{ crit.name }}" });
+    {% endfor %}
+    
+    // Sort according to previously saved ranks if present
+    const savedRanks = {{ problem.preferences.get('ranks', [])|tojson }};
+    if (savedRanks && savedRanks.length === criteria.length) {
+        criteria.sort((a, b) => savedRanks.indexOf(a.id) - savedRanks.indexOf(b.id));
+    }
+    
+    function renderRanks() {
+        const container = document.getElementById("criteria-sort-list");
+        container.innerHTML = "";
+        
+        criteria.forEach((crit, idx) => {
+            const item = document.createElement("div");
+            item.className = "rank-sort-item";
+            item.innerHTML = `
+                <div class="rank-badge">${idx + 1}º</div>
+                <div class="rank-name">${crit.name}</div>
+                <div class="rank-actions">
+                    <button type="button" class="btn-rank-move" onclick="moveItem(${idx}, -1)" ${idx === 0 ? 'disabled' : ''}><i class="fa-solid fa-arrow-up"></i></button>
+                    <button type="button" class="btn-rank-move" onclick="moveItem(${idx}, 1)" ${idx === criteria.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-down"></i></button>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+    }
+    
+    function moveItem(index, direction) {
+        const targetIndex = index + direction;
+        if (targetIndex < 0 || targetIndex >= criteria.length) return;
+        
+        // Swap
+        const temp = criteria[index];
+        criteria[index] = criteria[targetIndex];
+        criteria[targetIndex] = temp;
+        
+        renderRanks();
+    }
+    
+    function submitSmarter() {
+        const orderIds = criteria.map(c => c.id);
+        const payload = {
+            ranks: orderIds
+        };
+        
+        fetch("{{ url_for('evaluate_method', problem_id=problem.id) }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.href = res.redirect;
+            } else {
+                alert("Erro ao calcular: " + res.message);
+            }
+        });
+    }
+    
+    window.onload = renderRanks;
+</script>
+{% endblock %}

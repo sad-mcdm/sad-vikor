@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ config.SYSTEM_TITLE }} — Multi-Criteria Decision Hub{% endblock %}</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Core CSS Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <header class="header">
+        <div class="header-container">
+            <a href="{{ url_for('index') }}" class="logo" style="display: flex; align-items: center; text-decoration: none;">
+                <img src="{{ url_for('static', filename='images/logos/nexus_mcdm.png') }}" class="logo-img" alt="NEXUS MCDM Logo" style="height: 28px; width: 28px; margin-right: 8px; vertical-align: middle; filter: drop-shadow(0 2px 6px rgba(139, 92, 246, 0.4));">
+                <span class="logo-text">
+                    {% set title_parts = config.SYSTEM_TITLE.split(' ') %}
+                    {{ title_parts[0] }}<span class="logo-accent">{% if title_parts|length > 1 %} {{ title_parts[1] }}{% endif %}</span>
+                </span>
+            </a>
+            
+            <nav class="nav">
+                {% if session.get('user_id') %}
+                    <span class="nav-user"><i class="fa-solid fa-user-circle"></i> {{ session.get('username') }}</span>
+                    <a href="{{ url_for('dashboard') }}" class="nav-link"><i class="fa-solid fa-table-columns"></i> Dashboard</a>
+                    <a href="{{ url_for('docs_page') }}" class="nav-link"><i class="fa-solid fa-book"></i> Documentação</a>
+                    <a href="{{ url_for('logout') }}" class="nav-btn-logout"><i class="fa-solid fa-sign-out-alt"></i> Sair</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}" class="nav-link">Login</a>
+                    <a href="{{ url_for('register') }}" class="nav-btn">Cadastrar</a>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="container">
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="flash flash-{{ category }}">
+                                <i class="fa-solid {% if category == 'success' %}fa-circle-check{% elif category == 'danger' %}fa-circle-exclamation{% else %}fa-circle-info{% endif %}"></i>
+                                <span>{{ message }}</span>
+                                <button class="flash-close" onclick="this.parentElement.remove()">&times;</button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container footer-container" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <p style="margin: 0; font-size: 0.85rem; opacity: 0.8;">
+                Direitos Reservados &copy; 2026 <strong>NEXUS-MCDM</strong>. Todos os direitos reservados.
+            </p>
+            <div class="footer-badges" style="margin: 0;">
+                <span class="badge badge-teal" style="font-size: 0.75rem;">{{ config.SYSTEM_TITLE }}</span>
+                <span class="badge badge-purple" style="font-size: 0.75rem;">NEXUS-MCDM</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Global App Scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,359 @@
+{% extends 'base.html' %}
+
+{% block title %}Avaliação BWT — SAD Central{% endblock %}
+
+{% block content %}
+<div class="evaluation-container">
+    <div class="evaluation-header">
+        <h1 class="page-title"><i class="fa-solid fa-code-branch text-teal"></i> Elicitação de Preferências BWT</h1>
+        <p class="page-subtitle">Pondere critérios usando taxas de substituição reais e elicie a função de valor de cada critério pelo método da bisseção.</p>
+    </div>
+    
+    <!-- Tab Controls -->
+    <div class="tab-controls mt-4">
+        <button type="button" class="tab-btn active" onclick="switchTab('criteria-tab')"><i class="fa-solid fa-shuffle"></i> Tradeoffs Inter-critério</button>
+        <button type="button" class="tab-btn" onclick="switchTab('bisection-tab')"><i class="fa-solid fa-chart-area"></i> Bisseção Intra-critério</button>
+    </div>
+    
+    <!-- Tab 1: BWT Criteria tradeoffs -->
+    <div id="criteria-tab" class="tab-content active">
+        <div class="glass-card mt-3">
+            <h3>Taxas de Substituição de Critérios</h3>
+            <p class="section-subtitle">Identifique o Melhor e o Pior critério e insira as taxas de troca cardinais (valores reais positivos).</p>
+            
+            <div class="bwm-references-selectors mt-4">
+                <div class="form-group">
+                    <label for="best-criterion-select" class="font-bold text-teal">Melhor Critério (Mais Importante):</label>
+                    <select id="best-criterion-select" onchange="updateBestWorst()" class="form-select-lg">
+                        <!-- Injected via JS -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="worst-criterion-select" class="font-bold text-purple">Pior Critério (Menos Importante):</label>
+                    <select id="worst-criterion-select" onchange="updateBestWorst()" class="form-select-lg">
+                        <!-- Injected via JS -->
+                    </select>
+                </div>
+            </div>
+            
+            <div class="bwm-vectors-grid mt-4">
+                <!-- Vector 1: Best-to-Others -->
+                <div class="vector-section">
+                    <h4>Taxas Best-to-Others (Substituição de Melhor sobre j)</h4>
+                    <p class="section-subtitle">Insira valores reais positivos (t<sub>Bj</sub> &approx; w<sub>B</sub> / w<sub>j</sub>) representando a taxa de troca.</p>
+                    <div class="vector-inputs-list" id="best-to-others-container">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+                
+                <!-- Vector 2: Others-to-Worst -->
+                <div class="vector-section">
+                    <h4>Taxas Others-to-Worst (Substituição de j sobre Pior)</h4>
+                    <p class="section-subtitle">Insira valores reais positivos (t<sub>jW</sub> &approx; w<sub>j</sub> / w<sub>W</sub>) representando a taxa de troca.</p>
+                    <div class="vector-inputs-list" id="others-to-worst-container">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tab 2: Bisection values -->
+    <div id="bisection-tab" class="tab-content">
+        <div class="glass-card mt-3">
+            <h3>Método da Bisseção (Funções de Valor)</h3>
+            <p class="section-subtitle">Ajuste o controle deslizante para definir a consequência física $x_{0.5}$ que representa a utilidade média de 50% ($v_j(x_{0.5}) = 0.5$).</p>
+            
+            <div class="bisection-sliders-grid mt-4" id="bisection-sliders-container">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="wizard-actions mt-4">
+        <a href="{{ url_for('consequence_matrix', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+        <button type="button" class="btn btn-teal" onclick="submitBwt()"><i class="fa-solid fa-square-poll-vertical"></i> Calcular e Ver Resultados</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const criteria = [];
+    const matrixData = {{ matrix_data|tojson }};
+    const colMins = [];
+    const colMaxs = [];
+    
+    // Pre-calculate column mins and maxs
+    {% for crit in criteria %}
+        criteria.push({ id: {{ crit.id }}, name: "{{ crit.name }}", type: "{{ crit.criteria_type }}" });
+    {% endfor %}
+    
+    for (let j = 0; j < criteria.length; j++) {
+        let col = matrixData.map(row => row[j]);
+        colMins.push(Math.min(...col));
+        colMaxs.push(Math.max(...col));
+    }
+    
+    const savedPrefs = {{ problem.preferences|tojson }} || {};
+    
+    // References
+    let bestIdx = savedPrefs.best_idx !== undefined ? parseInt(savedPrefs.best_idx) : 0;
+    let worstIdx = savedPrefs.worst_idx !== undefined ? parseInt(savedPrefs.worst_idx) : criteria.length - 1;
+    
+    // Substitution rate vectors
+    let bestToOthers = savedPrefs.best_to_others || Array(criteria.length).fill(1.0);
+    let others_to_worst = savedPrefs.others_to_worst || Array(criteria.length).fill(1.0);
+    
+    // Bisection midpoints
+    let bisectionMidpoints = savedPrefs.bisection_midpoints || {};
+    
+    function switchTab(tabId) {
+        document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+        document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
+        
+        document.getElementById(tabId).classList.add("active");
+        event.currentTarget.classList.add("active");
+    }
+    
+    function initBestWorstDropdowns() {
+        const bestSelect = document.getElementById("best-criterion-select");
+        const worstSelect = document.getElementById("worst-criterion-select");
+        
+        bestSelect.innerHTML = "";
+        worstSelect.innerHTML = "";
+        
+        criteria.forEach((crit, idx) => {
+            const opt1 = document.createElement("option");
+            opt1.value = idx;
+            opt1.innerText = crit.name;
+            if (idx === bestIdx) opt1.selected = true;
+            bestSelect.appendChild(opt1);
+            
+            const opt2 = document.createElement("option");
+            opt2.value = idx;
+            opt2.innerText = crit.name;
+            if (idx === worstIdx) opt2.selected = true;
+            worstSelect.appendChild(opt2);
+        });
+    }
+    
+    function updateBestWorst() {
+        bestIdx = parseInt(document.getElementById("best-criterion-select").value);
+        worstIdx = parseInt(document.getElementById("worst-criterion-select").value);
+        
+        bestToOthers[bestIdx] = 1.0;
+        others_to_worst[worstIdx] = 1.0;
+        
+        renderVectors();
+    }
+    
+    function renderVectors() {
+        const bestContainer = document.getElementById("best-to-others-container");
+        const worstContainer = document.getElementById("others-to-worst-container");
+        
+        bestContainer.innerHTML = "";
+        worstContainer.innerHTML = "";
+        
+        criteria.forEach((crit, idx) => {
+            // Best-to-Others row
+            const rowBest = document.createElement("div");
+            rowBest.className = "vector-row-item";
+            const valBest = bestToOthers[idx] || 1.0;
+            
+            if (idx === bestIdx) {
+                rowBest.innerHTML = `<span class="vector-label font-bold text-teal">${crit.name} (Melhor)</span> <span class="badge badge-teal">1.0</span>`;
+            } else {
+                rowBest.innerHTML = `
+                    <span class="vector-label">${crit.name}</span>
+                    <input type="number" step="any" min="0.001" class="form-input-sm" value="${valBest}" onchange="updateBestToOthers(${idx}, this.value)">
+                `;
+            }
+            bestContainer.appendChild(rowBest);
+            
+            // Others-to-Worst row
+            const rowWorst = document.createElement("div");
+            rowWorst.className = "vector-row-item";
+            const valWorst = others_to_worst[idx] || 1.0;
+            
+            if (idx === worstIdx) {
+                rowWorst.innerHTML = `<span class="vector-label font-bold text-purple">${crit.name} (Pior)</span> <span class="badge badge-purple">1.0</span>`;
+            } else {
+                rowWorst.innerHTML = `
+                    <span class="vector-label">${crit.name}</span>
+                    <input type="number" step="any" min="0.001" class="form-input-sm" value="${valWorst}" onchange="updateOthersToWorst(${idx}, this.value)">
+                `;
+            }
+            worstContainer.appendChild(rowWorst);
+        });
+    }
+    
+    function updateBestToOthers(idx, val) {
+        bestToOthers[idx] = parseFloat(val) || 1.0;
+    }
+    
+    function updateOthersToWorst(idx, val) {
+        others_to_worst[idx] = parseFloat(val) || 1.0;
+    }
+    
+    // Render Bisection sliders
+    function renderBisectionSliders() {
+        const container = document.getElementById("bisection-sliders-container");
+        container.innerHTML = "";
+        
+        criteria.forEach((crit, idx) => {
+            const min = colMins[idx];
+            const max = colMaxs[idx];
+            const cidStr = crit.id.toString();
+            
+            const defMid = (min + max) / 2.0;
+            const savedMid = bisectionMidpoints[cidStr] !== undefined ? parseFloat(bisectionMidpoints[cidStr]) : defMid;
+            
+            const card = document.createElement("div");
+            card.className = "bisection-slider-card";
+            card.innerHTML = `
+                <div class="bisection-title-values">
+                    <span class="bisection-name font-bold">${crit.name}</span>
+                    <span class="bisection-bounds">Faixa: [${min.toFixed(2)}, ${max.toFixed(2)}]</span>
+                </div>
+                <div class="bisection-slider-row">
+                    <input type="range" class="form-range flex-grow-1" min="${min}" max="${max}" step="any" value="${savedMid}" id="bisect_slider_${crit.id}" oninput="updateBisectionLabel(${crit.id}, this.value)">
+                    <span class="bisection-midpoint-badge" id="bisect_badge_${crit.id}">${savedMid.toFixed(2)}</span>
+                </div>
+                <div class="bisection-mini-graph-container">
+                    <canvas id="canvas_${crit.id}" width="200" height="60" class="bisection-mini-canvas"></canvas>
+                </div>
+            `;
+            container.appendChild(card);
+            
+            // Draw initial mini graph
+            drawMiniBisectionGraph(crit.id, min, max, savedMid, crit.type === 'benefit');
+        });
+    }
+    
+    function updateBisectionLabel(critId, val) {
+        const numVal = parseFloat(val);
+        document.getElementById(`bisect_badge_${critId}`).innerText = numVal.toFixed(2);
+        bisectionMidpoints[critId.toString()] = numVal;
+        
+        // Redraw canvas
+        const critIndex = criteria.findIndex(c => c.id === critId);
+        const crit = criteria[critIndex];
+        drawMiniBisectionGraph(critId, colMins[critIndex], colMaxs[critIndex], numVal, crit.type === 'benefit');
+    }
+    
+    function drawMiniBisectionGraph(critId, min, max, mid, isBenefit) {
+        const canvas = document.getElementById(`canvas_${critId}`);
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const w = canvas.width;
+        const h = canvas.height;
+        const padding = 10;
+        const gw = w - 2 * padding;
+        const gh = h - 2 * padding;
+        
+        // Draw grid/border
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+        ctx.strokeRect(padding, padding, gw, gh);
+        
+        // Helper to convert (x, y) utility coordinates (in ranges [min, max], [0, 1]) to canvas pixels
+        function toPixels(x, y) {
+            const range = max - min;
+            const px = padding + (range === 0 ? 0.5 : (x - min) / range) * gw;
+            const py = padding + (1.0 - y) * gh; // invert y
+            return { x: px, y: py };
+        }
+        
+        let pStart, pMid, pEnd;
+        
+        if (isBenefit) {
+            pStart = toPixels(min, 0.0);
+            pMid = toPixels(mid, 0.5);
+            pEnd = toPixels(max, 1.0);
+        } else {
+            pStart = toPixels(min, 1.0);
+            pMid = toPixels(mid, 0.5);
+            pEnd = toPixels(max, 0.0);
+        }
+        
+        // Draw path
+        ctx.beginPath();
+        ctx.moveTo(pStart.x, pStart.y);
+        ctx.lineTo(pMid.x, pMid.y);
+        ctx.lineTo(pEnd.x, pEnd.y);
+        ctx.strokeStyle = "rgba(0, 242, 195, 0.8)"; // Royal Teal color
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw dots
+        ctx.fillStyle = "rgba(141, 75, 255, 1)"; // Amethyst color for midpoint
+        ctx.beginPath();
+        ctx.arc(pMid.x, pMid.y, 4, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+    
+    // Initialize UI
+    function initBwtUi() {
+        initBestWorstDropdowns();
+        renderVectors();
+        renderBisectionSliders();
+    }
+    
+    // Submit
+    function submitBwt() {
+        if (bestIdx === worstIdx && criteria.length > 1) {
+            alert("O melhor critério não pode ser igual ao pior critério.");
+            return;
+        }
+        
+        // Ensure bisection midpoints are completely filled (if slider wasn't touched)
+        criteria.forEach((crit, idx) => {
+            const cidStr = crit.id.toString();
+            if (bisectionMidpoints[cidStr] === undefined) {
+                bisectionMidpoints[cidStr] = (colMins[idx] + colMaxs[idx]) / 2.0;
+            }
+        });
+        
+        const payload = {
+            best_idx: bestIdx,
+            worst_idx: worstIdx,
+            best_to_others: bestToOthers,
+            others_to_worst: others_to_worst,
+            bisection_midpoints: bisectionMidpoints
+        };
+        
+        const saveBtn = document.querySelector(".wizard-actions button.btn-teal");
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Otimizando...`;
+        saveBtn.disabled = true;
+        
+        fetch("{{ url_for('evaluate_method', problem_id=problem.id) }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.href = res.redirect;
+            } else {
+                alert("Erro ao calcular: " + res.message);
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            }
+        })
+        .catch(err => {
+            alert("Erro na conexão ao enviar preferências BWT.");
+            console.error(err);
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        });
+    }
+    
+    window.onload = initBwtUi;
+</script>
+{% endblock %}

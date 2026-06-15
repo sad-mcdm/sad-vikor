@@ -1,0 +1,365 @@
+{% extends 'base.html' %}
+
+{% block title %}Avaliação AHP — SAD Central{% endblock %}
+
+{% block content %}
+<div class="evaluation-container">
+    <div class="evaluation-header">
+        <h1 class="page-title"><i class="fa-solid fa-scale-balanced text-teal"></i> Elicitação de Preferências AHP</h1>
+        <p class="page-subtitle">Preencha as comparações par a par para os critérios e alternativas de acordo com a escala Saaty.</p>
+    </div>
+    
+    <!-- Tab Controls -->
+    <div class="tab-controls mt-4">
+        <button type="button" class="tab-btn active" onclick="switchTab('criteria-tab')"><i class="fa-solid fa-list"></i> Comparação de Critérios</button>
+        <button type="button" class="tab-btn" onclick="switchTab('alternatives-tab')"><i class="fa-solid fa-users"></i> Comparação de Alternativas</button>
+    </div>
+    
+    <!-- Tab 1: Criteria Pairwise comparisons -->
+    <div id="criteria-tab" class="tab-content active">
+        <div class="glass-card mt-3">
+            <h3>Importância Relativa dos Critérios</h3>
+            <p class="section-subtitle">Compare cada par de critérios e selecione qual é mais importante e em que grau.</p>
+            
+            <div class="pairwise-questions-list mt-4" id="criteria-questions-container">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tab 2: Alternatives Pairwise comparisons -->
+    <div id="alternatives-tab" class="tab-content">
+        <div class="glass-card mt-3">
+            <div class="flex-between-header">
+                <div>
+                    <h3>Prioridade das Alternativas nos Critérios</h3>
+                    <p class="section-subtitle">Selecione um critério para comparar a preferência das alternativas sob sua ótica.</p>
+                </div>
+                <div class="criteria-dropdown-container">
+                    <label for="active-criterion-select">Critério Ativo: </label>
+                    <select id="active-criterion-select" onchange="renderAlternativeQuestions(this.value)">
+                        <!-- Injected via JS -->
+                    </select>
+                </div>
+            </div>
+            
+            <div class="pairwise-questions-list mt-4" id="alternatives-questions-container">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="wizard-actions mt-4">
+        <a href="{{ url_for('consequence_matrix', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+        <button type="button" class="btn btn-teal" onclick="submitAhp()"><i class="fa-solid fa-square-poll-vertical"></i> Calcular e Ver Resultados</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Data structures
+    const criteria = [];
+    const alternatives = [];
+    const matrixData = {{ matrix_data|tojson }};
+    const criteriaTypes = [];
+    
+    {% for crit in criteria %}
+        criteria.push({ id: {{ crit.id }}, name: "{{ crit.name }}", type: "{{ crit.criteria_type }}" });
+        criteriaTypes.push("{{ crit.criteria_type }}");
+    {% endfor %}
+    
+    {% for alt in alternatives %}
+        alternatives.push({ id: {{ alt.id }}, name: "{{ alt.name }}" });
+    {% endfor %}
+    
+    // Load previously saved preferences or initialize default structures
+    const savedPrefs = {{ problem.preferences|tojson }} || {};
+    
+    // 1. Initialize Criteria comparison matrix
+    let criteriaMatrix = savedPrefs.criteria_matrix || Array(criteria.length).fill().map(() => Array(criteria.length).fill(1.0));
+    
+    // 2. Initialize Alternatives comparison matrices
+    let alternativesMatrices = savedPrefs.alternatives_matrices || {};
+    
+    // Scale choices for Saaty 1-9
+    const saatyOptions = [
+        { value: 1, label: "Igual" },
+        { value: 2, label: "2" },
+        { value: 3, label: "Moderado" },
+        { value: 4, label: "4" },
+        { value: 5, label: "Forte" },
+        { value: 6, label: "6" },
+        { value: 7, label: "Muito Forte" },
+        { value: 8, label: "8" },
+        { value: 9, label: "Extremo" }
+    ];
+    
+    function switchTab(tabId) {
+        document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+        document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
+        
+        document.getElementById(tabId).classList.add("active");
+        event.currentTarget.classList.add("active");
+    }
+    
+    // Render criteria questions
+    function renderCriteriaQuestions() {
+        const container = document.getElementById("criteria-questions-container");
+        container.innerHTML = "";
+        
+        let questionCount = 0;
+        for (let i = 0; i < criteria.length; i++) {
+            for (let j = i + 1; j < criteria.length; j++) {
+                questionCount++;
+                const savedVal = criteriaMatrix[i][j];
+                
+                // Determine direction (which is preferred)
+                let preferred = i;
+                let intensity = savedVal;
+                if (savedVal < 1.0) {
+                    preferred = j;
+                    intensity = 1.0 / savedVal;
+                }
+                
+                const qRow = document.createElement("div");
+                qRow.className = "pairwise-question-card";
+                qRow.innerHTML = `
+                    <div class="question-title">Comparação ${questionCount}: <strong>${criteria[i].name}</strong> vs <strong>${criteria[j].name}</strong></div>
+                    <div class="comparison-ui">
+                        <div class="prefer-selection">
+                            <label>Mais importante:</label>
+                            <div class="btn-group-toggle">
+                                <button type="button" class="btn-toggle ${preferred === i ? 'active' : ''}" onclick="setCriteriaPreferred(${i}, ${j}, ${i}, this)">${criteria[i].name}</button>
+                                <button type="button" class="btn-toggle ${preferred === j ? 'active' : ''}" onclick="setCriteriaPreferred(${i}, ${j}, ${j}, this)">${criteria[j].name}</button>
+                            </div>
+                        </div>
+                        <div class="intensity-selection">
+                            <label>Intensidade (Saaty):</label>
+                            <select class="form-select-sm" onchange="setCriteriaIntensity(${i}, ${j}, this.value)">
+                                ${saatyOptions.map(opt => `<option value="${opt.value}" ${Math.abs(intensity - opt.value) < 0.1 ? 'selected' : ''}>${opt.value} - ${opt.label}</option>`).join("")}
+                            </select>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(qRow);
+            }
+        }
+    }
+    
+    function setCriteriaPreferred(i, j, prefIdx, btn) {
+        // Find buttons in the same container and toggle
+        const btns = btn.parentElement.querySelectorAll(".btn-toggle");
+        btns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        
+        const currentVal = Math.abs(criteriaMatrix[i][j]) >= 1.0 ? Math.abs(criteriaMatrix[i][j]) : 1.0 / Math.abs(criteriaMatrix[i][j]);
+        if (prefIdx === i) {
+            criteriaMatrix[i][j] = currentVal;
+            criteriaMatrix[j][i] = 1.0 / currentVal;
+        } else {
+            criteriaMatrix[i][j] = 1.0 / currentVal;
+            criteriaMatrix[j][i] = currentVal;
+        }
+    }
+    
+    function setCriteriaIntensity(i, j, intensity) {
+        const value = parseFloat(intensity);
+        const isPreferredI = criteriaMatrix[i][j] >= 1.0;
+        
+        if (isPreferredI) {
+            criteriaMatrix[i][j] = value;
+            criteriaMatrix[j][i] = 1.0 / value;
+        } else {
+            criteriaMatrix[i][j] = 1.0 / value;
+            criteriaMatrix[j][i] = value;
+        }
+    }
+    
+    // Render Alternatives comparison questions for a specific Criterion
+    function renderAlternativeQuestions(critIndex) {
+        const critId = criteria[critIndex].id;
+        const cidStr = critId.toString();
+        const container = document.getElementById("alternatives-questions-container");
+        container.innerHTML = "";
+        
+        // Initialize if not present
+        if (!alternativesMatrices[cidStr]) {
+            // Generate matrix pre-filled with Saaty ratio mappings
+            const matrix = Array(alternatives.length).fill().map(() => Array(alternatives.length).fill(1.0));
+            const isBenefit = (criteria[critIndex].type === 'benefit');
+            
+            for (let r = 0; r < alternatives.length; r++) {
+                const valR = matrixData[r][critIndex];
+                for (let c = 0; c < alternatives.length; c++) {
+                    const valC = matrixData[c][critIndex];
+                    matrix[r][c] = calculateSaatyRatio(valR, valC, isBenefit);
+                }
+            }
+            alternativesMatrices[cidStr] = matrix;
+        }
+        
+        const altMatrix = alternativesMatrices[cidStr];
+        let questionCount = 0;
+        
+        for (let i = 0; i < alternatives.length; i++) {
+            for (let j = i + 1; j < alternatives.length; j++) {
+                questionCount++;
+                const savedVal = altMatrix[i][j];
+                
+                let preferred = i;
+                let intensity = savedVal;
+                if (savedVal < 1.0) {
+                    preferred = j;
+                    intensity = 1.0 / savedVal;
+                }
+                
+                const qRow = document.createElement("div");
+                qRow.className = "pairwise-question-card";
+                qRow.innerHTML = `
+                    <div class="question-title">Comparação ${questionCount}: <strong>${alternatives[i].name}</strong> vs <strong>${alternatives[j].name}</strong></div>
+                    <div class="comparison-ui">
+                        <div class="prefer-selection">
+                            <label>Mais preferível:</label>
+                            <div class="btn-group-toggle">
+                                <button type="button" class="btn-toggle ${preferred === i ? 'active' : ''}" onclick="setAltPreferred(${critId}, ${i}, ${j}, ${i}, this)">${alternatives[i].name}</button>
+                                <button type="button" class="btn-toggle ${preferred === j ? 'active' : ''}" onclick="setAltPreferred(${critId}, ${i}, ${j}, ${j}, this)">${alternatives[j].name}</button>
+                            </div>
+                        </div>
+                        <div class="intensity-selection">
+                            <label>Intensidade (Saaty):</label>
+                            <select class="form-select-sm" onchange="setAltIntensity(${critId}, ${i}, ${j}, this.value)">
+                                ${saatyOptions.map(opt => `<option value="${opt.value}" ${Math.abs(intensity - opt.value) < 0.1 ? 'selected' : ''}>${opt.value} - ${opt.label}</option>`).join("")}
+                            </select>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(qRow);
+            }
+        }
+    }
+    
+    function setAltPreferred(critId, i, j, prefIdx, btn) {
+        const btns = btn.parentElement.querySelectorAll(".btn-toggle");
+        btns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        
+        const matrix = alternativesMatrices[critId.toString()];
+        const currentVal = Math.abs(matrix[i][j]) >= 1.0 ? Math.abs(matrix[i][j]) : 1.0 / Math.abs(matrix[i][j]);
+        
+        if (prefIdx === i) {
+            matrix[i][j] = currentVal;
+            matrix[j][i] = 1.0 / currentVal;
+        } else {
+            matrix[i][j] = 1.0 / currentVal;
+            matrix[j][i] = currentVal;
+        }
+    }
+    
+    function setAltIntensity(critId, i, j, intensity) {
+        const value = parseFloat(intensity);
+        const matrix = alternativesMatrices[critId.toString()];
+        const isPreferredI = matrix[i][j] >= 1.0;
+        
+        if (isPreferredI) {
+            matrix[i][j] = value;
+            matrix[j][i] = 1.0 / value;
+        } else {
+            matrix[i][j] = 1.0 / value;
+            matrix[j][i] = value;
+        }
+    }
+    
+    // Pre-fill helper based on ratio mapping
+    function calculateSaatyRatio(valI, valJ, isBenefit) {
+        if (valI === valJ) return 1.0;
+        if (!isBenefit) {
+            // Swap for cost
+            const temp = valI;
+            valI = valJ;
+            valJ = temp;
+        }
+        
+        const ratio = valJ === 0 ? (valI > 0 ? 9.0 : 1.0) : valI / valJ;
+        if (ratio < 1.0) {
+            const invRatio = 1.0 / ratio;
+            const score = getRatioScore(invRatio);
+            return 1.0 / score;
+        } else {
+            return parseFloat(getRatioScore(ratio));
+        }
+    }
+    
+    function getRatioScore(ratio) {
+        if (ratio <= 1.05) return 1;
+        if (ratio <= 1.2) return 2;
+        if (ratio >= 3.0) return 9;
+        const score = 2 + (ratio - 1.2) * (7.0 / 1.8);
+        return intRound(score);
+    }
+    
+    function intRound(val) {
+        return Math.round(val);
+    }
+    
+    // Initialize UI
+    function initAhpUi() {
+        renderCriteriaQuestions();
+        
+        // Populate criteria select dropdown
+        const select = document.getElementById("active-criterion-select");
+        select.innerHTML = "";
+        criteria.forEach((crit, idx) => {
+            const opt = document.createElement("option");
+            opt.value = idx;
+            opt.innerText = crit.name;
+            select.appendChild(opt);
+        });
+        
+        // Render first criteria's alternative questions
+        if (criteria.length > 0) {
+            renderAlternativeQuestions(0);
+        }
+    }
+    
+    // Submit
+    function submitAhp() {
+        const payload = {
+            criteria_matrix: criteriaMatrix,
+            alternatives_matrices: alternativesMatrices
+        };
+        
+        // Show saving state
+        const saveBtn = document.querySelector(".wizard-actions button.btn-teal");
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Calculando...`;
+        saveBtn.disabled = true;
+        
+        fetch("{{ url_for('evaluate_method', problem_id=problem.id) }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.href = res.redirect;
+            } else {
+                alert("Erro ao calcular: " + res.message);
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            }
+        })
+        .catch(err => {
+            alert("Erro na conexão ao enviar preferências AHP.");
+            console.error(err);
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        });
+    }
+    
+    window.onload = initAhpUi;
+</script>
+{% endblock %}

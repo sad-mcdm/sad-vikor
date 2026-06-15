@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+
+{% block title %}Avaliação VIKOR — {{ config.SYSTEM_TITLE }}{% endblock %}
+
+{% block content %}
+<div class="evaluation-container">
+    <div class="evaluation-header">
+        <h1 class="page-title"><i class="fa-solid fa-sliders text-teal"></i> Elicitação de Parâmetros (VIKOR)</h1>
+        <p class="page-subtitle">Atribua notas de relevância de 0 a 100 para cada critério e configure o parâmetro de concordância do decisor.</p>
+    </div>
+    
+    <div class="evaluation-grid">
+        <!-- Direct Weights Form -->
+        <div class="glass-card flex-grow-1">
+            <h3 class="section-title">Swing Weighting para VIKOR</h3>
+            <p class="section-subtitle">Atribua o valor 100 para o critério mais importante, e notas proporcionais para os outros.</p>
+            
+            <form id="vikor-form" class="mt-4">
+                <div class="sliders-list">
+                    {% for crit in criteria %}
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-name font-bold">{{ crit.name }}</span>
+                                <span class="slider-type">({{ 'Benefício' if crit.criteria_type == 'benefit' else 'Custo' }})</span>
+                            </div>
+                            <div class="slider-control">
+                                <input type="range" class="form-range" min="0" max="100" value="{{ problem.preferences.get('weights', {}).get(crit.id|string, 50) }}" id="range_{{ crit.id }}" oninput="updateRangeValue({{ crit.id }}, this.value)">
+                                <span class="range-display-badge" id="badge_{{ crit.id }}">{{ problem.preferences.get('weights', {}).get(crit.id|string, 50) }}</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <h3 class="section-title mt-5">Peso da Estratégia de Decisão ($v$)</h3>
+                <p class="section-subtitle">Define o balanço entre a utilidade da maioria dos critérios e o arrependimento do decisor individual. Geralmente configurado em 0.5.</p>
+                
+                <div class="slider-row mt-3">
+                    <div class="slider-info">
+                        <span class="slider-name font-bold">Peso da Maioria ($v$)</span>
+                        <span class="slider-type">(0.0 a 1.0)</span>
+                    </div>
+                    <div class="slider-control">
+                        <input type="range" class="form-range" min="0" max="1" step="0.05" value="{{ problem.preferences.get('v', 0.5) }}" id="param_v" oninput="updateVDisplay(this.value)">
+                        <span class="range-display-badge bg-purple" id="badge_v">{{ problem.preferences.get('v', 0.5) }}</span>
+                    </div>
+                </div>
+                
+                <div class="evaluation-actions mt-5">
+                    <a href="{{ url_for('consequence_matrix', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+                    <button type="button" class="btn btn-teal" onclick="submitVikor()"><i class="fa-solid fa-square-poll-vertical"></i> Calcular e Ver Resultados</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Side Panel: Info -->
+        <div class="glass-card sidebar-panel-info">
+            <h4>Como funciona o VIKOR?</h4>
+            <p>O método **VIKOR** (Otimização Multicritério e Solução de Compromisso) é projetado para lidar com critérios conflitantes.</p>
+            <p>Ele gera uma classificação baseada na proximidade a uma solução ideal de compromisso, ponderando:</p>
+            <ul>
+                <li>**Utilidade de Grupo ($S$):** Representa a satisfação global do grupo (calculada pela distância Manhattan).</li>
+                <li>**Arrependimento Individual ($R$):** Representa a pior desvantagem sofrida em um único critério (calculada pela distância Chebyshev).</li>
+            </ul>
+            <p>O parâmetro $v$ define a força do voto majoritário ($v > 0.5$ prioriza a utilidade geral; $v < 0.5$ prioriza a proteção ao arrependimento individual).</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateRangeValue(id, val) {
+        document.getElementById(`badge_${id}`).innerText = val;
+    }
+    
+    function updateVDisplay(val) {
+        document.getElementById('badge_v').innerText = val;
+    }
+    
+    function submitVikor() {
+        const weights = {};
+        {% for crit in criteria %}
+            weights["{{ crit.id }}"] = parseFloat(document.getElementById("range_{{ crit.id }}").value);
+        {% endfor %}
+        
+        const payload = {
+            weights: weights,
+            v: parseFloat(document.getElementById("param_v").value)
+        };
+        
+        fetch("{{ url_for('evaluate_method', problem_id=problem.id) }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.href = res.redirect;
+            } else {
+                alert("Erro ao calcular: " + res.message);
+            }
+        });
+    }
+</script>
+{% endblock %}

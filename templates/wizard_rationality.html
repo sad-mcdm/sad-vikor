@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}Racionalidade — SAD Central{% endblock %}
+
+{% block content %}
+<div class="wizard-container">
+    <div class="wizard-steps-indicator">
+        <div class="wizard-step active">1. Racionalidade</div>
+        <div class="wizard-line"></div>
+        <div class="wizard-step">2. Problemática</div>
+        <div class="wizard-line"></div>
+        <div class="wizard-step">3. Método</div>
+        <div class="wizard-line"></div>
+        <div class="wizard-step">4. Matriz</div>
+    </div>
+    
+    <div class="glass-card wizard-card-full">
+        <h2 class="wizard-title">Passo 1: Qual a Racionalidade do Problema?</h2>
+        <p class="wizard-subtitle">Defina se a compensação entre desempenhos de diferentes critérios será permitida no cálculo.</p>
+        
+        <form action="{{ url_for('select_rationality', problem_id=problem.id) }}" method="POST" id="rationality-form">
+            <div class="cards-selector">
+                <!-- Compensatory option -->
+                <label class="selector-card">
+                    <input type="radio" name="rationality" value="compensatory" checked onchange="submitForm()">
+                    <div class="selector-card-content">
+                        <div class="selector-card-icon"><i class="fa-solid fa-scale-balanced text-teal"></i></div>
+                        <h3>Compensatória</h3>
+                        <p>O baixo desempenho de uma alternativa em um critério pode ser compensado por um alto desempenho em outro critério. Exemplo clássico: MAVT, AHP, SMARTS, BWM.</p>
+                    </div>
+                </label>
+                
+                <!-- Non-compensatory option -->
+                <label class="selector-card">
+                    <input type="radio" name="rationality" value="non-compensatory">
+                    <div class="selector-card-content">
+                        <div class="selector-card-icon"><i class="fa-solid fa-shield-halved text-purple"></i></div>
+                        <h3>Não-compensatória</h3>
+                        <p>Compensações não são aceitas. Desempenhos fracos em critérios críticos desclassificam a alternativa ou limitam estritamente sua posição. Exemplo: PROMETHEE, ELECTRE.</p>
+                    </div>
+                </label>
+            </div>
+            
+            <div class="wizard-actions">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar ao Painel</a>
+                <button type="submit" class="btn btn-teal">Avançar <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function submitForm() {
+        // Auto submit can be enabled, but we have button for deliberate submit
+    }
+</script>
+{% endblock %}

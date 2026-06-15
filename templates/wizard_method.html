@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+
+{% block title %}Método — SAD Central{% endblock %}
+
+{% block content %}
+<div class="wizard-container">
+    <div class="wizard-steps-indicator">
+        <div class="wizard-step completed">1. Racionalidade</div>
+        <div class="wizard-line completed"></div>
+        <div class="wizard-step completed">2. Problemática</div>
+        <div class="wizard-line completed"></div>
+        <div class="wizard-step active">3. Método</div>
+        <div class="wizard-line"></div>
+        <div class="wizard-step">4. Matriz</div>
+    </div>
+    
+    <div class="glass-card wizard-card-full">
+        <h2 class="wizard-title">Passo 3: Selecione o Método Multicritério</h2>
+        <p class="wizard-subtitle">Escolha o solucionador matemático adequado para o cálculo.</p>
+        
+        {% if is_compatible %}
+            <form action="{{ url_for('select_method', problem_id=problem.id) }}" method="POST">
+                <div class="cards-selector-grid-3">
+                    {% if problem.rationality == 'compensatory' %}
+                        {% if config.SYSTEM_MODE == 'central' or config.SYSTEM_MODE == 'smarts_smarter' %}
+                        <!-- SMARTS -->
+                        <label class="selector-card">
+                            <input type="radio" name="method" value="smarts" checked>
+                            <div class="selector-card-content">
+                                <div class="selector-card-header-method">
+                                    <h3>SMARTS</h3>
+                                    <span class="badge badge-teal">Swing Weighting</span>
+                                </div>
+                                <p>Elicitação direta de pesos (0-100) e funções de valor lineares baseadas nos limites da matriz de consequências.</p>
+                            </div>
+                        </label>
+                        
+                        <!-- SMARTER -->
+                        <label class="selector-card">
+                            <input type="radio" name="method" value="smarter">
+                            <div class="selector-card-content">
+                                <div class="selector-card-header-method">
+                                    <h3>SMARTER</h3>
+                                    <span class="badge badge-teal">ROC Weights</span>
+                                </div>
+                                <p>Elicitação minimalista baseada em ordenação ordinal de importância dos critérios. Utiliza pesos centróides (ROC).</p>
+                            </div>
+                        </label>
+                        {% endif %}
+                        
+                        {% if config.SYSTEM_MODE == 'central' %}
+                        <!-- AHP -->
+                        <label class="selector-card">
+                            <input type="radio" name="method" value="ahp">
+                            <div class="selector-card-content">
+                                <div class="selector-card-header-method">
+                                    <h3>AHP</h3>
+                                    <span class="badge badge-teal">Saaty Scale</span>
+                                </div>
+                                <p>Comparações par a par parciais na escala de 1 a 9. Avaliação de consistência transitiva via Razão de Consistência (CR).</p>
+                            </div>
+                        </label>
+                        
+                        <!-- MACBETH -->
+                        <label class="selector-card">
+                            <input type="radio" name="method" value="macbeth">
+                            <div class="selector-card-content">
+                                <div class="selector-card-header-method">
+                                    <h3>MACBETH</h3>
+                                    <span class="badge badge-teal">LP Qualitative</span>
+                                </div>
+                                <p>Comparações qualitativas semânticas de atratividade resolvidas via Programação Linear. Constrói escalas cardinais puras.</p>
+                            </div>
+                        </label>
+                        
+                        <!-- BWM -->
+                        <label class="selector-card">
+                            <input type="radio" name="method" value="bwm">
+                            <div class="selector-card-content">
+                                <div class="selector-card-header-method">
+                                    <h3>BWM</h3>
+                                    <span class="badge badge-teal">LP Minimax</span>
+                                </div>
+                                <p>Julgamentos estruturados par a par a partir do melhor e em direção ao pior critério (escala 1-9), resolvido via PL.</p>
+                            </div>
+                        </label>
+                        
+                        <!-- BWT -->
+                        <label class="selector-card">
+                            <input type="radio" name="method" value="bwt">
+                            <div class="selector-card-content">
+                                <div class="selector-card-header-method">
+                                    <h3>BWT</h3>
+                                    <span class="badge badge-teal">Tradeoff + Bisection</span>
+                                </div>
+                                <p>Método avançado de taxas reais de substituição resolvidas via PL e elicitação intra-critério pelo método da bisseção.</p>
+                            </div>
+                        </label>
+
+                        <!-- TOPSIS -->
+                        <label class="selector-card">
+                            <input type="radio" name="method" value="topsis">
+                            <div class="selector-card-content">
+                                <div class="selector-card-header-method">
+                                    <h3>TOPSIS</h3>
+                                    <span class="badge badge-teal">Ideal Distance</span>
+                                </div>
+                                <p>Técnica de proximidade à solução ideal. Calcula distâncias geométricas (euclidianas) de cada alternativa à ideal e à anti-ideal.</p>
+                            </div>
+                        </label>
+
+                        <!-- VIKOR -->
+                        <label class="selector-card">
+                            <input type="radio" name="method" value="vikor">
+                            <div class="selector-card-content">
+                                <div class="selector-card-header-method">
+                                    <h3>VIKOR</h3>
+                                    <span class="badge badge-teal">Compromise Score</span>
+                                </div>
+                                <p>Otimização multicritério e solução de compromisso, ponderando a utilidade máxima de grupo e o arrependimento individual.</p>
+                            </div>
+                        </label>
+                        {% endif %}
+                    {% else %}
+                        <!-- ELECTRE -->
+                        <label class="selector-card">
+                            <input type="radio" name="method" value="electre" checked>
+                            <div class="selector-card-content">
+                                <div class="selector-card-header-method">
+                                    <h3>ELECTRE</h3>
+                                    <span class="badge badge-purple">Outranking</span>
+                                </div>
+                                <p>Família de sobreclassificação não-compensatória. Constrói relações baseadas em Concordância/Discordância e Veto (ELECTRE I, IS, II, III, IV, TRI).</p>
+                            </div>
+                        </label>
+
+                        <!-- PROMETHEE -->
+                        <label class="selector-card">
+                            <input type="radio" name="method" value="promethee">
+                            <div class="selector-card-content">
+                                <div class="selector-card-header-method">
+                                    <h3>PROMETHEE</h3>
+                                    <span class="badge badge-purple">Preference Flows</span>
+                                </div>
+                                <p>Família de sobreclassificação baseada em fluxos de preferências direcionados e funções de preferência generalizadas (PROMETHEE I, II, III, IV, V, VI, TRI).</p>
+                            </div>
+                        </label>
+                    {% endif %}
+                </div>
+                
+                <div class="wizard-actions">
+                    <a href="{{ url_for('select_problematic', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+                    <button type="submit" class="btn btn-teal">Avançar <i class="fa-solid fa-arrow-right"></i></button>
+                </div>
+            </form>
+        {% else %}
+            <div class="alert alert-danger">
+                <h4>Combinação Incompatível</h4>
+                <p>Por favor, selecione uma problemática de decisão válida para prosseguir.</p>
+                <div class="mt-3">
+                    <a href="{{ url_for('select_problematic', problem_id=problem.id) }}" class="btn btn-teal"><i class="fa-solid fa-sync"></i> Reconfigurar Problemática</a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+
+{% block title %}Avaliação ELECTRE — {{ config.SYSTEM_TITLE }}{% endblock %}
+
+{% block content %}
+<div class="evaluation-container">
+    <div class="evaluation-header">
+        <h1 class="page-title"><i class="fa-solid fa-scale-balanced text-purple"></i> Parâmetros da Família ELECTRE</h1>
+        <p class="page-subtitle">Configure os pesos dos critérios, escolha a variante do ELECTRE adequada para o seu problema e ajuste seus limiares de decisão.</p>
+    </div>
+    
+    <div class="evaluation-grid">
+        <!-- Main Form -->
+        <div class="glass-card flex-grow-1">
+            <form id="electre-form">
+                <!-- 1. Selection of ELECTRE Version -->
+                <h3 class="section-title">1. Selecione a Variante do Método</h3>
+                <div class="form-group mt-3">
+                    <label for="electre_version" class="form-label font-bold">Variante Disponível (baseada na problemática: {{ problem.problematic|upper }}):</label>
+                    <select class="form-select bg-dark text-white border-teal" id="electre_version" onchange="toggleVersionParams(this.value)">
+                        {% if problem.problematic == 'choice' %}
+                            <option value="I" {% if problem.preferences.get('electre_version') == 'I' %}selected{% endif %}>ELECTRE I (Escolha - Limiares Nítidos)</option>
+                            <option value="IS" {% if problem.preferences.get('electre_version') == 'IS' %}selected{% endif %}>ELECTRE IS (Escolha - Pseudo-critérios e Veto)</option>
+                        {% elif problem.problematic == 'ranking' %}
+                            <option value="II" {% if problem.preferences.get('electre_version') == 'II' %}selected{% endif %}>ELECTRE II (Ordenação - Relações Fortes/Fracas)</option>
+                            <option value="III" {% if problem.preferences.get('electre_version') == 'III' or not problem.preferences.get('electre_version') %}selected{% endif %}>ELECTRE III (Ordenação - Pseudo-critérios e Credibilidade)</option>
+                            <option value="IV" {% if problem.preferences.get('electre_version') == 'IV' %}selected{% endif %}>ELECTRE IV (Ordenação - Julgamentos Ordinais Sem Pesos)</option>
+                        {% elif problem.problematic == 'sorting' %}
+                            <option value="TRI" selected>ELECTRE TRI (Classificação por Categoria e Perfis Limites)</option>
+                        {% else %}
+                            <option value="I">ELECTRE I (Escolha)</option>
+                        {% endif %}
+                    </select>
+                </div>
+
+                <!-- 2. Criteria Weights (Hidden for ELECTRE IV) -->
+                <div id="weights-section" class="mt-5">
+                    <h3 class="section-title">2. Elicitação de Pesos (Importância)</h3>
+                    <p class="section-subtitle">Atribua notas de relevância de 0 a 100 para os critérios.</p>
+                    <div class="sliders-list mt-3">
+                        {% for crit in criteria %}
+                            <div class="slider-row">
+                                <div class="slider-info">
+                                    <span class="slider-name font-bold">{{ crit.name }}</span>
+                                    <span class="slider-type">({{ 'Benefício' if crit.criteria_type == 'benefit' else 'Custo' }})</span>
+                                </div>
+                                <div class="slider-control">
+                                    <input type="range" class="form-range" min="0" max="100" value="{{ problem.preferences.get('weights', {}).get(crit.id|string, 50) }}" id="range_{{ crit.id }}" oninput="updateRangeValue({{ crit.id }}, this.value)">
+                                    <span class="range-display-badge" id="badge_{{ crit.id }}">{{ problem.preferences.get('weights', {}).get(crit.id|string, 50) }}</span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- 3. Global Thresholds (For I, IS, II) -->
+                <div id="global-thresholds-section" class="mt-5" style="display: none;">
+                    <h3 class="section-title">3. Limiares Globais de Sobreclassificação</h3>
+                    <p class="section-subtitle">Define os níveis globais de maioria e veto minoritário aceitáveis.</p>
+                    
+                    <div class="slider-row mt-3">
+                        <div class="slider-info">
+                            <span class="slider-name font-bold">Limiar de Concordância (c̄)</span>
+                            <span class="slider-type">(Mínimo de maioria de pesos, ex: 0.6)</span>
+                        </div>
+                        <div class="slider-control">
+                            <input type="range" class="form-range" min="0" max="1" step="0.05" value="{{ problem.preferences.get('concordance_threshold', 0.6) }}" id="concordance_threshold" oninput="updateDisplay('concordance_threshold', this.value)">
+                            <span class="range-display-badge bg-purple" id="badge_concordance_threshold">{{ problem.preferences.get('concordance_threshold', 0.6) }}</span>
+                        </div>
+                    </div>
+                    
+                    <div id="discordance-row" class="slider-row mt-3">
+                        <div class="slider-info">
+                            <span class="slider-name font-bold">Limiar de Discordância (d̄)</span>
+                            <span class="slider-type">(Desvantagem máxima local permitida, ex: 0.4)</span>
+                        </div>
+                        <div class="slider-control">
+                            <input type="range" class="form-range" min="0" max="1" step="0.05" value="{{ problem.preferences.get('discordance_threshold', 0.4) }}" id="discordance_threshold" oninput="updateDisplay('discordance_threshold', this.value)">
+                            <span class="range-display-badge bg-purple" id="badge_discordance_threshold">{{ problem.preferences.get('discordance_threshold', 0.4) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Pseudo-criteria Local Thresholds (For IS, III, TRI) -->
+                <div id="local-thresholds-section" class="mt-5" style="display: none;">
+                    <h3 class="section-title">Limiares Locais por Critério</h3>
+                    <p class="section-subtitle">Ajuste os limiares de indiferença (q), preferência (p) e veto (v) na escala física dos critérios.</p>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-dark border-teal">
+                            <thead>
+                                <tr>
+                                    <th>Critério</th>
+                                    <th>Indiferença (q) <i class="fa-solid fa-circle-question" title="Diferença máxima considerada indiferente"></i></th>
+                                    <th>Preferência (p) <i class="fa-solid fa-circle-question" title="Diferença mínima para preferência estrita"></i></th>
+                                    <th>Veto (v) <i class="fa-solid fa-circle-question" title="Diferença que anula a sobreclassificação"></i></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for crit in criteria %}
+                                    {% set t = problem.preferences.get('thresholds', {}).get(crit.id|string, {}) %}
+                                    <tr>
+                                        <td><strong>{{ crit.name }}</strong></td>
+                                        <td><input type="number" step="any" class="form-control bg-dark text-white border-teal text-center" id="q_{{ crit.id }}" value="{{ t.get('q', 0.0) }}"></td>
+                                        <td><input type="number" step="any" class="form-control bg-dark text-white border-teal text-center" id="p_{{ crit.id }}" value="{{ t.get('p', 0.1) }}"></td>
+                                        <td><input type="number" step="any" class="form-control bg-dark text-white border-teal text-center" id="v_{{ crit.id }}" value="{{ t.get('v', 999999.0) }}"></td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="evaluation-actions mt-5">
+                    <a href="{{ url_for('consequence_matrix', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+                    <button type="button" class="btn btn-teal" onclick="submitElectre()"><i class="fa-solid fa-square-poll-vertical"></i> Calcular e Ver Resultados</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Side Panel: Info -->
+        <div class="glass-card sidebar-panel-info">
+            <h4>Como funciona o ELECTRE?</h4>
+            <p>Os métodos da família **ELECTRE** são **não-compensatórios**, o que significa que uma desvantagem extrema em um critério (veto) não pode ser compensada por desempenhos excelentes em outros.</p>
+            <p>Eles constroem uma relação de sobreclassificação indicando se uma alternativa é pelo menos tão boa quanto outra.</p>
+            <p>**Pseudo-critérios:** Usam limiares q e p para evitar transições abruptas (ex: uma diferença de R$ 1,00 fazer um projeto superar o outro instantaneamente).</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateRangeValue(id, val) {
+        document.getElementById(`badge_${id}`).innerText = val;
+    }
+    
+    function updateDisplay(id, val) {
+        document.getElementById(`badge_${id}`).innerText = val;
+    }
+    
+    function toggleVersionParams(version) {
+        const weightsSec = document.getElementById('weights-section');
+        const globalSec = document.getElementById('global-thresholds-section');
+        const localSec = document.getElementById('local-thresholds-section');
+        const discordanceRow = document.getElementById('discordance-row');
+        
+        // Hide all initially
+        weightsSec.style.display = 'block';
+        globalSec.style.display = 'none';
+        localSec.style.display = 'none';
+        discordanceRow.style.display = 'block';
+        
+        if (version === 'IV') {
+            weightsSec.style.display = 'none';
+            localSec.style.display = 'block';
+        } else if (version === 'I') {
+            globalSec.style.display = 'block';
+        } else if (version === 'IS') {
+            globalSec.style.display = 'block';
+            discordanceRow.style.display = 'none';  // Veto local is used instead
+            localSec.style.display = 'block';
+        } else if (version === 'II') {
+            globalSec.style.display = 'block';
+        } else if (version === 'III' || version === 'TRI') {
+            localSec.style.display = 'block';
+        }
+    }
+    
+    // Initial trigger
+    window.onload = function() {
+        toggleVersionParams(document.getElementById('electre_version').value);
+    }
+    
+    function submitElectre() {
+        const version = document.getElementById('electre_version').value;
+        const weights = {};
+        {% for crit in criteria %}
+            weights["{{ crit.id }}"] = parseFloat(document.getElementById("range_{{ crit.id }}").value);
+        {% endfor %}
+        
+        const thresholds = {};
+        {% for crit in criteria %}
+            thresholds["{{ crit.id }}"] = {
+                q: parseFloat(document.getElementById("q_{{ crit.id }}").value || 0.0),
+                p: parseFloat(document.getElementById("p_{{ crit.id }}").value || 0.1),
+                v: parseFloat(document.getElementById("v_{{ crit.id }}").value || 999999.0)
+            };
+        {% endfor %}
+        
+        const payload = {
+            electre_version: version,
+            weights: weights,
+            thresholds: thresholds,
+            concordance_threshold: parseFloat(document.getElementById("concordance_threshold").value || 0.6),
+            discordance_threshold: parseFloat(document.getElementById("discordance_threshold").value || 0.4)
+        };
+        
+        fetch("{{ url_for('evaluate_method', problem_id=problem.id) }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.href = res.redirect;
+            } else {
+                alert("Erro ao calcular: " + res.message);
+            }
+        });
+    }
+</script>
+{% endblock %}

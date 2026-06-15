@@ -1,0 +1,268 @@
+{% extends 'base.html' %}
+
+{% block title %}Avaliação PROMETHEE — {{ config.SYSTEM_TITLE }}{% endblock %}
+
+{% block content %}
+<div class="evaluation-container">
+    <div class="evaluation-header">
+        <h1 class="page-title"><i class="fa-solid fa-square-poll-vertical text-teal"></i> Parâmetros da Família PROMETHEE</h1>
+        <p class="page-subtitle">Configure os pesos dos critérios, a variante do PROMETHEE adequada e as funções de preferência locais.</p>
+    </div>
+    
+    <div class="evaluation-grid">
+        <!-- Main Form -->
+        <div class="glass-card flex-grow-1">
+            <form id="promethee-form">
+                <!-- 1. Selection of PROMETHEE Version -->
+                <h3 class="section-title">1. Selecione a Variante do Método</h3>
+                <div class="form-group mt-3">
+                    <label for="promethee_version" class="form-label font-bold">Variante Disponível (baseada na problemática: {{ problem.problematic|upper }}):</label>
+                    <select class="form-select bg-dark text-white border-teal" id="promethee_version" onchange="toggleVersionParams(this.value)">
+                        {% if problem.problematic == 'choice' %}
+                            <option value="I" {% if problem.preferences.get('promethee_version') == 'I' %}selected{% endif %}>PROMETHEE I (Escolha - Relações Parciais)</option>
+                            <option value="II" {% if problem.preferences.get('promethee_version') == 'II' or not problem.preferences.get('promethee_version') %}selected{% endif %}>PROMETHEE II (Escolha - Ordenação Completa)</option>
+                        {% elif problem.problematic == 'ranking' %}
+                            <option value="I" {% if problem.preferences.get('promethee_version') == 'I' %}selected{% endif %}>PROMETHEE I (Ordenação Parcial - Incomparabilidades)</option>
+                            <option value="II" {% if problem.preferences.get('promethee_version') == 'II' or not problem.preferences.get('promethee_version') %}selected{% endif %}>PROMETHEE II (Ordenação Completa)</option>
+                            <option value="III" {% if problem.preferences.get('promethee_version') == 'III' %}selected{% endif %}>PROMETHEE III (Ordenação por Intervalos de Confiança)</option>
+                            <option value="IV" {% if problem.preferences.get('promethee_version') == 'IV' %}selected{% endif %}>PROMETHEE IV (Ordenação Contínua)</option>
+                            <option value="VI" {% if problem.preferences.get('promethee_version') == 'VI' %}selected{% endif %}>PROMETHEE VI (Sensibilidade / Abordagem Cognitiva)</option>
+                        {% elif problem.problematic == 'sorting' %}
+                            <option value="TRI" selected>PROMETHEE TRI (Classificação em Categorias)</option>
+                        {% elif problem.problematic == 'portfolio' %}
+                            <option value="V" selected>PROMETHEE V (Otimização de Portfólio de Projetos)</option>
+                        {% else %}
+                            <option value="II" selected>PROMETHEE II (Ordenação Completa)</option>
+                        {% endif %}
+                    </select>
+                </div>
+
+                <!-- 2. Criteria Weights -->
+                <div id="weights-section" class="mt-5">
+                    <h3 class="section-title">2. Elicitação de Pesos (Swing Weighting)</h3>
+                    <p class="section-subtitle">Atribua notas de relevância de 0 a 100 para os critérios.</p>
+                    <div class="sliders-list mt-3">
+                        {% for crit in criteria %}
+                            <div class="slider-row">
+                                <div class="slider-info">
+                                    <span class="slider-name font-bold">{{ crit.name }}</span>
+                                    <span class="slider-type">({{ 'Benefício' if crit.criteria_type == 'benefit' else 'Custo' }})</span>
+                                </div>
+                                <div class="slider-control">
+                                    <input type="range" class="form-range" min="0" max="100" value="{{ problem.preferences.get('weights', {}).get(crit.id|string, 50) }}" id="range_{{ crit.id }}" oninput="updateRangeValue({{ crit.id }}, this.value)">
+                                    <span class="range-display-badge" id="badge_{{ crit.id }}">{{ problem.preferences.get('weights', {}).get(crit.id|string, 50) }}</span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- 3. Preference Functions -->
+                <div id="functions-section" class="mt-5">
+                    <h3 class="section-title">3. Funções de Preferência Locais (Avaliação Intra-critério)</h3>
+                    <p class="section-subtitle">Defina o comportamento de preferência local do decisor em cada critério.</p>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-dark border-teal">
+                            <thead>
+                                <tr>
+                                    <th>Critério</th>
+                                    <th>Função</th>
+                                    <th>Indiferença (q) <i class="fa-solid fa-circle-question" title="Diferença máxima até a qual o decisor é indiferente"></i></th>
+                                    <th>Preferência (p) <i class="fa-solid fa-circle-question" title="Diferença a partir da qual o decisor tem preferência estrita"></i></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for crit in criteria %}
+                                    {% set fn = problem.preferences.get('functions', {}).get(crit.id|string, {}) %}
+                                    <tr>
+                                        <td><strong>{{ crit.name }}</strong></td>
+                                        <td>
+                                            <select class="form-select bg-dark text-white border-teal text-center" id="fn_type_{{ crit.id }}" onchange="toggleThresholdInputs('{{ crit.id }}')">
+                                                <option value="usual" {% if fn.get('type', 'usual') == 'usual' %}selected{% endif %}>Usual (Sem Limiares)</option>
+                                                <option value="linear" {% if fn.get('type') == 'linear' %}selected{% endif %}>Linear (Com Limiares q e p)</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="number" step="any" class="form-control bg-dark text-white border-teal text-center" id="q_{{ crit.id }}" value="{{ fn.get('q', 0.0) }}"></td>
+                                        <td><input type="number" step="any" class="form-control bg-dark text-white border-teal text-center" id="p_{{ crit.id }}" value="{{ fn.get('p', 1.0) }}"></td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 4. Version Specific Parameters -->
+                <!-- PROMETHEE III: Confianca Alpha -->
+                <div id="promethee-iii-section" class="mt-5" style="display: none;">
+                    <h3 class="section-title">Limiar de Incerteza (α)</h3>
+                    <p class="section-subtitle">Define a tolerância de fluxo líquido abaixo da qual duas alternativas são consideradas indistinguíveis (PROMETHEE III).</p>
+                    <div class="slider-row mt-3">
+                        <div class="slider-info">
+                            <span class="slider-name font-bold">Limiar de Fluxo (α)</span>
+                            <span class="slider-type">(0.0 a 0.5)</span>
+                        </div>
+                        <div class="slider-control">
+                            <input type="range" class="form-range" min="0" max="0.5" step="0.01" value="{{ problem.preferences.get('alpha_threshold', 0.05) }}" id="alpha_threshold" oninput="updateAlphaDisplay(this.value)">
+                            <span class="range-display-badge bg-purple" id="badge_alpha">{{ problem.preferences.get('alpha_threshold', 0.05) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PROMETHEE V: Portfolio Constraints -->
+                <div id="promethee-v-section" class="mt-5" style="display: none;">
+                    <h3 class="section-title">Parâmetros de Portfólio & Orçamento</h3>
+                    <p class="section-subtitle">Configure o orçamento limite disponível e os custos de investimento estimados para cada alternativa.</p>
+                    
+                    <div class="form-group mt-3 col-md-6">
+                        <label for="budget" class="form-label font-bold">Orçamento Máximo Total (Budget):</label>
+                        <input type="number" step="any" class="form-control bg-dark text-white border-teal" id="budget" value="{{ problem.preferences.get('budget', 100.0) }}">
+                    </div>
+                    
+                    <div class="table-responsive mt-3">
+                        <table class="table table-dark border-teal">
+                            <thead>
+                                <tr>
+                                    <th>Projeto / Alternativa</th>
+                                    <th>Custo do Projeto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for alt in alternatives %}
+                                    <tr>
+                                        <td><strong>{{ alt.name }}</strong></td>
+                                        <td><input type="number" step="any" class="form-control bg-dark text-white border-teal text-center" id="cost_{{ alt.id }}" value="{{ problem.preferences.get('costs', {}).get(alt.id|string, 10.0) }}"></td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- PROMETHEE TRI: Categories sorting configuration -->
+                <div id="promethee-tri-section" class="mt-5" style="display: none;">
+                    <h3 class="section-title">Configurações de Classificação (TRI)</h3>
+                    <p class="section-subtitle">Defina o número de categorias de ordenação (ex: Ruim, Médio, Bom).</p>
+                    
+                    <div class="form-group mt-3 col-md-6">
+                        <label for="num_categories" class="form-label font-bold">Número de Categorias:</label>
+                        <input type="number" min="2" max="10" class="form-control bg-dark text-white border-teal" id="num_categories" value="{{ problem.preferences.get('num_categories', 3) }}">
+                    </div>
+                </div>
+
+                <div class="evaluation-actions mt-5">
+                    <a href="{{ url_for('consequence_matrix', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+                    <button type="button" class="btn btn-teal" onclick="submitPromethee()"><i class="fa-solid fa-square-poll-vertical"></i> Calcular e Ver Resultados</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Side Panel: Info -->
+        <div class="glass-card sidebar-panel-info">
+            <h4>Como funciona o PROMETHEE?</h4>
+            <p>A família **PROMETHEE** (Preference Ranking Organization Method for Enrichment Evaluations) estabelece sobreclassificações a partir de fluxos de preferência:</p>
+            <ul>
+                <li><strong>Fluxo de Saída (Φ⁺):</strong> Mede o quanto uma alternativa domina as outras (atratividade).</li>
+                <li><strong>Fluxo de Entrada (Φ⁻):</strong> Mede o quanto uma alternativa é dominada pelas outras (fraqueza).</li>
+                <li><strong>Fluxo Líquido (Φ):</strong> Diferença líquida (Φ⁺ - Φ⁻) que reflete o balanço de preferência.</li>
+            </ul>
+            <p><strong>Funções de Preferência:</strong> Mapeiam a diferença física de notas em um grau de preferência [0, 1]. O tipo **Linear** permite atenuar pequenas diferenças definindo um limiar de indiferença q e preferência estrita p.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateRangeValue(id, val) {
+        document.getElementById(`badge_${id}`).innerText = val;
+    }
+    
+    function updateAlphaDisplay(val) {
+        document.getElementById('badge_alpha').innerText = val;
+    }
+    
+    function toggleThresholdInputs(critId) {
+        const type = document.getElementById(`fn_type_${critId}`).value;
+        const qInput = document.getElementById(`q_${critId}`);
+        const pInput = document.getElementById(`p_${critId}`);
+        
+        if (type === 'usual') {
+            qInput.disabled = true;
+            pInput.disabled = true;
+            qInput.style.opacity = 0.5;
+            pInput.style.opacity = 0.5;
+        } else {
+            qInput.disabled = false;
+            pInput.disabled = false;
+            qInput.style.opacity = 1.0;
+            pInput.style.opacity = 1.0;
+        }
+    }
+    
+    function toggleVersionParams(version) {
+        document.getElementById('promethee-iii-section').style.display = (version === 'III') ? 'block' : 'none';
+        document.getElementById('promethee-v-section').style.display = (version === 'V') ? 'block' : 'none';
+        document.getElementById('promethee-tri-section').style.display = (version === 'TRI') ? 'block' : 'none';
+    }
+    
+    // Initial setup on load
+    window.onload = function() {
+        const version = document.getElementById('promethee_version').value;
+        toggleVersionParams(version);
+        
+        {% for crit in criteria %}
+            toggleThresholdInputs('{{ crit.id }}');
+        {% endfor %}
+    };
+    
+    function submitPromethee() {
+        const version = document.getElementById('promethee_version').value;
+        const weights = {};
+        {% for crit in criteria %}
+            weights["{{ crit.id }}"] = parseFloat(document.getElementById("range_{{ crit.id }}").value);
+        {% endfor %}
+        
+        const functions = {};
+        {% for crit in criteria %}
+            functions["{{ crit.id }}"] = {
+                type: document.getElementById("fn_type_{{ crit.id }}").value,
+                q: parseFloat(document.getElementById("q_{{ crit.id }}").value || 0.0),
+                p: parseFloat(document.getElementById("p_{{ crit.id }}").value || 1.0)
+            };
+        {% endfor %}
+        
+        const costs = {};
+        {% if problem.problematic == 'portfolio' %}
+            {% for alt in alternatives %}
+                costs["{{ alt.id }}"] = parseFloat(document.getElementById("cost_{{ alt.id }}").value || 0.0);
+            {% endfor %}
+        {% endif %}
+        
+        const payload = {
+            promethee_version: version,
+            weights: weights,
+            functions: functions,
+            alpha_threshold: parseFloat(document.getElementById("alpha_threshold") ? document.getElementById("alpha_threshold").value : 0.05),
+            budget: parseFloat(document.getElementById("budget") ? document.getElementById("budget").value : 100.0),
+            costs: costs,
+            num_categories: parseInt(document.getElementById("num_categories") ? document.getElementById("num_categories").value : 3)
+        };
+        
+        fetch("{{ url_for('evaluate_method', problem_id=problem.id) }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.href = res.redirect;
+            } else {
+                alert("Erro ao calcular: " + res.message);
+            }
+        });
+    }
+</script>
+{% endblock %}

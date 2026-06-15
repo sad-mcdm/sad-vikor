@@ -1,0 +1,399 @@
+{% extends 'base.html' %}
+
+{% block title %}Avaliação BWM — SAD Central{% endblock %}
+
+{% block content %}
+<div class="evaluation-container">
+    <div class="evaluation-header">
+        <h1 class="page-title"><i class="fa-solid fa-list-check text-teal"></i> Elicitação de Preferências BWM</h1>
+        <p class="page-subtitle">Configure o Melhor e Pior critério, defina as preferências Best-to-Others e Others-to-Worst, e preencha a priorização de alternativas.</p>
+    </div>
+    
+    <!-- Tab Controls -->
+    <div class="tab-controls mt-4">
+        <button type="button" class="tab-btn active" onclick="switchTab('criteria-tab')"><i class="fa-solid fa-star"></i> Melhor e Pior Critério</button>
+        <button type="button" class="tab-btn" onclick="switchTab('alternatives-tab')"><i class="fa-solid fa-users"></i> Comparação de Alternativas (AHP)</button>
+    </div>
+    
+    <!-- Tab 1: BWM Criteria preferences -->
+    <div id="criteria-tab" class="tab-content active">
+        <div class="glass-card mt-3">
+            <h3>Ponderação dos Critérios</h3>
+            <p class="section-subtitle">Identifique o critério mais importante (Melhor) e o menos importante (Pior) e defina as comparações na escala 1-9.</p>
+            
+            <div class="bwm-references-selectors mt-4">
+                <div class="form-group">
+                    <label for="best-criterion-select" class="font-bold text-teal">Melhor Critério (Mais Importante):</label>
+                    <select id="best-criterion-select" onchange="updateBestWorst()" class="form-select-lg">
+                        <!-- Injected via JS -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="worst-criterion-select" class="font-bold text-purple">Pior Critério (Menos Importante):</label>
+                    <select id="worst-criterion-select" onchange="updateBestWorst()" class="form-select-lg">
+                        <!-- Injected via JS -->
+                    </select>
+                </div>
+            </div>
+            
+            <div class="bwm-vectors-grid mt-4">
+                <!-- Vector 1: Best-to-Others -->
+                <div class="vector-section">
+                    <h4>Vetor Best-to-Others (Preferência do Melhor sobre os outros)</h4>
+                    <p class="section-subtitle">Atribua notas de 1 (igual) a 9 (extremo) indicando quanto o Melhor critério é preferível sobre os demais.</p>
+                    <div class="vector-inputs-list" id="best-to-others-container">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+                
+                <!-- Vector 2: Others-to-Worst -->
+                <div class="vector-section">
+                    <h4>Vetor Others-to-Worst (Preferência dos outros sobre o Pior)</h4>
+                    <p class="section-subtitle">Atribua notas de 1 (igual) a 9 (extremo) indicando quanto cada critério é preferível sobre o Pior critério.</p>
+                    <div class="vector-inputs-list" id="others-to-worst-container">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tab 2: Alternatives comparisons (Shared with AHP) -->
+    <div id="alternatives-tab" class="tab-content">
+        <div class="glass-card mt-3">
+            <div class="flex-between-header">
+                <div>
+                    <h3>Prioridade de Alternativas nos Critérios (Igual ao AHP)</h3>
+                    <p class="section-subtitle">Selecione o critério ativo e preencha as comparações par a par das alternativas na escala Saaty.</p>
+                </div>
+                <div class="criteria-dropdown-container">
+                    <label for="active-criterion-select">Critério Ativo: </label>
+                    <select id="active-criterion-select" onchange="renderAlternativeQuestions(this.value)">
+                        <!-- Injected via JS -->
+                    </select>
+                </div>
+            </div>
+            
+            <div class="pairwise-questions-list mt-4" id="alternatives-questions-container">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="wizard-actions mt-4">
+        <a href="{{ url_for('consequence_matrix', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+        <button type="button" class="btn btn-teal" onclick="submitBwm()"><i class="fa-solid fa-square-poll-vertical"></i> Calcular e Ver Resultados</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const criteria = [];
+    const alternatives = [];
+    const matrixData = {{ matrix_data|tojson }};
+    
+    {% for crit in criteria %}
+        criteria.push({ id: {{ crit.id }}, name: "{{ crit.name }}" });
+    {% endfor %}
+    
+    {% for alt in alternatives %}
+        alternatives.push({ id: {{ alt.id }}, name: "{{ alt.name }}" });
+    {% endfor %}
+    
+    const savedPrefs = {{ problem.preferences|tojson }} || {};
+    
+    // Default reference selections
+    let bestIdx = savedPrefs.best_idx !== undefined ? parseInt(savedPrefs.best_idx) : 0;
+    let worstIdx = savedPrefs.worst_idx !== undefined ? parseInt(savedPrefs.worst_idx) : criteria.length - 1;
+    
+    // Default vectors
+    let bestToOthers = savedPrefs.best_to_others || Array(criteria.length).fill(1.0);
+    let others_to_worst = savedPrefs.others_to_worst || Array(criteria.length).fill(1.0);
+    
+    // Alternatives comparisons
+    let alternativesMatrices = savedPrefs.alternatives_matrices || {};
+    
+    const scaleOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const saatyOptions = [
+        { value: 1, label: "Igual" },
+        { value: 2, label: "2" },
+        { value: 3, label: "Moderado" },
+        { value: 4, label: "4" },
+        { value: 5, label: "Forte" },
+        { value: 6, label: "6" },
+        { value: 7, label: "Muito Forte" },
+        { value: 8, label: "8" },
+        { value: 9, label: "Extremo" }
+    ];
+    
+    function switchTab(tabId) {
+        document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+        document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
+        
+        document.getElementById(tabId).classList.add("active");
+        event.currentTarget.classList.add("active");
+    }
+    
+    // Populate Best/Worst dropdowns
+    function initBestWorstDropdowns() {
+        const bestSelect = document.getElementById("best-criterion-select");
+        const worstSelect = document.getElementById("worst-criterion-select");
+        
+        bestSelect.innerHTML = "";
+        worstSelect.innerHTML = "";
+        
+        criteria.forEach((crit, idx) => {
+            const opt1 = document.createElement("option");
+            opt1.value = idx;
+            opt1.innerText = crit.name;
+            if (idx === bestIdx) opt1.selected = true;
+            bestSelect.appendChild(opt1);
+            
+            const opt2 = document.createElement("option");
+            opt2.value = idx;
+            opt2.innerText = crit.name;
+            if (idx === worstIdx) opt2.selected = true;
+            worstSelect.appendChild(opt2);
+        });
+    }
+    
+    function updateBestWorst() {
+        bestIdx = parseInt(document.getElementById("best-criterion-select").value);
+        worstIdx = parseInt(document.getElementById("worst-criterion-select").value);
+        
+        // Best-to-Best must be 1.0, Worst-to-Worst must be 1.0
+        bestToOthers[bestIdx] = 1.0;
+        others_to_worst[worstIdx] = 1.0;
+        
+        renderVectors();
+    }
+    
+    function renderVectors() {
+        const bestContainer = document.getElementById("best-to-others-container");
+        const worstContainer = document.getElementById("others-to-worst-container");
+        
+        bestContainer.innerHTML = "";
+        worstContainer.innerHTML = "";
+        
+        criteria.forEach((crit, idx) => {
+            // Best-to-Others row
+            const rowBest = document.createElement("div");
+            rowBest.className = "vector-row-item";
+            const valBest = bestToOthers[idx] || 1;
+            
+            if (idx === bestIdx) {
+                rowBest.innerHTML = `<span class="vector-label font-bold text-teal">${crit.name} (Melhor)</span> <span class="badge badge-teal">1 - Igual</span>`;
+            } else {
+                rowBest.innerHTML = `
+                    <span class="vector-label">${crit.name}</span>
+                    <select class="form-select-sm" onchange="bestToOthers[${idx}] = parseInt(this.value)">
+                        ${scaleOptions.map(opt => `<option value="${opt}" ${valBest === opt ? 'selected' : ''}>${opt}</option>`).join("")}
+                    </select>
+                `;
+            }
+            bestContainer.appendChild(rowBest);
+            
+            // Others-to-Worst row
+            const rowWorst = document.createElement("div");
+            rowWorst.className = "vector-row-item";
+            const valWorst = others_to_worst[idx] || 1;
+            
+            if (idx === worstIdx) {
+                rowWorst.innerHTML = `<span class="vector-label font-bold text-purple">${crit.name} (Pior)</span> <span class="badge badge-purple">1 - Igual</span>`;
+            } else {
+                rowWorst.innerHTML = `
+                    <span class="vector-label">${crit.name}</span>
+                    <select class="form-select-sm" onchange="others_to_worst[${idx}] = parseInt(this.value)">
+                        ${scaleOptions.map(opt => `<option value="${opt}" ${valWorst === opt ? 'selected' : ''}>${opt}</option>`).join("")}
+                    </select>
+                `;
+            }
+            worstContainer.appendChild(rowWorst);
+        });
+    }
+    
+    // Render Alternatives comparison (AHP logic)
+    function renderAlternativeQuestions(critIndex) {
+        const critId = criteria[critIndex].id;
+        const cidStr = critId.toString();
+        const container = document.getElementById("alternatives-questions-container");
+        container.innerHTML = "";
+        
+        if (!alternativesMatrices[cidStr]) {
+            const matrix = Array(alternatives.length).fill().map(() => Array(alternatives.length).fill(1.0));
+            const isBenefit = (criteria[critIndex].type === 'benefit');
+            
+            for (let r = 0; r < alternatives.length; r++) {
+                const valR = matrixData[r][critIndex];
+                for (let c = 0; c < alternatives.length; c++) {
+                    const valC = matrixData[c][critIndex];
+                    matrix[r][c] = calculateSaatyRatio(valR, valC, isBenefit);
+                }
+            }
+            alternativesMatrices[cidStr] = matrix;
+        }
+        
+        const altMatrix = alternativesMatrices[cidStr];
+        let questionCount = 0;
+        
+        for (let i = 0; i < alternatives.length; i++) {
+            for (let j = i + 1; j < alternatives.length; j++) {
+                questionCount++;
+                const savedVal = altMatrix[i][j];
+                
+                let preferred = i;
+                let intensity = savedVal;
+                if (savedVal < 1.0) {
+                    preferred = j;
+                    intensity = 1.0 / savedVal;
+                }
+                
+                const qRow = document.createElement("div");
+                qRow.className = "pairwise-question-card";
+                qRow.innerHTML = `
+                    <div class="question-title">Comparação ${questionCount}: <strong>${alternatives[i].name}</strong> vs <strong>${alternatives[j].name}</strong></div>
+                    <div class="comparison-ui">
+                        <div class="prefer-selection">
+                            <label>Mais preferível:</label>
+                            <div class="btn-group-toggle">
+                                <button type="button" class="btn-toggle ${preferred === i ? 'active' : ''}" onclick="setAltPreferred(${critId}, ${i}, ${j}, ${i}, this)">${alternatives[i].name}</button>
+                                <button type="button" class="btn-toggle ${preferred === j ? 'active' : ''}" onclick="setAltPreferred(${critId}, ${i}, ${j}, ${j}, this)">${alternatives[j].name}</button>
+                            </div>
+                        </div>
+                        <div class="intensity-selection">
+                            <label>Intensidade (Saaty):</label>
+                            <select class="form-select-sm" onchange="setAltIntensity(${critId}, ${i}, ${j}, this.value)">
+                                ${saatyOptions.map(opt => `<option value="${opt.value}" ${Math.abs(intensity - opt.value) < 0.1 ? 'selected' : ''}>${opt.value} - ${opt.label}</option>`).join("")}
+                            </select>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(qRow);
+            }
+        }
+    }
+    
+    function setAltPreferred(critId, i, j, prefIdx, btn) {
+        const btns = btn.parentElement.querySelectorAll(".btn-toggle");
+        btns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        
+        const matrix = alternativesMatrices[critId.toString()];
+        const currentVal = Math.abs(matrix[i][j]) >= 1.0 ? Math.abs(matrix[i][j]) : 1.0 / Math.abs(matrix[i][j]);
+        
+        if (prefIdx === i) {
+            matrix[i][j] = currentVal;
+            matrix[j][i] = 1.0 / currentVal;
+        } else {
+            matrix[i][j] = 1.0 / currentVal;
+            matrix[j][i] = currentVal;
+        }
+    }
+    
+    function setAltIntensity(critId, i, j, intensity) {
+        const value = parseFloat(intensity);
+        const matrix = alternativesMatrices[critId.toString()];
+        const isPreferredI = matrix[i][j] >= 1.0;
+        
+        if (isPreferredI) {
+            matrix[i][j] = value;
+            matrix[j][i] = 1.0 / value;
+        } else {
+            matrix[i][j] = 1.0 / value;
+            matrix[j][i] = value;
+        }
+    }
+    
+    function calculateSaatyRatio(valI, valJ, isBenefit) {
+        if (valI === valJ) return 1.0;
+        if (!isBenefit) {
+            const temp = valI;
+            valI = valJ;
+            valJ = temp;
+        }
+        const ratio = valJ === 0 ? (valI > 0 ? 9.0 : 1.0) : valI / valJ;
+        if (ratio < 1.0) {
+            const invRatio = 1.0 / ratio;
+            const score = getRatioScore(invRatio);
+            return 1.0 / score;
+        } else {
+            return parseFloat(getRatioScore(ratio));
+        }
+    }
+    
+    function getRatioScore(ratio) {
+        if (ratio <= 1.05) return 1;
+        if (ratio <= 1.2) return 2;
+        if (ratio >= 3.0) return 9;
+        const score = 2 + (ratio - 1.2) * (7.0 / 1.8);
+        return Math.round(score);
+    }
+    
+    // Initialize UI
+    function initBwmUi() {
+        initBestWorstDropdowns();
+        renderVectors();
+        
+        const select = document.getElementById("active-criterion-select");
+        select.innerHTML = "";
+        criteria.forEach((crit, idx) => {
+            const opt = document.createElement("option");
+            opt.value = idx;
+            opt.innerText = crit.name;
+            select.appendChild(opt);
+        });
+        
+        if (criteria.length > 0) {
+            renderAlternativeQuestions(0);
+        }
+    }
+    
+    // Submit
+    function submitBwm() {
+        if (bestIdx === worstIdx && criteria.length > 1) {
+            alert("O melhor critério não pode ser igual ao pior critério.");
+            return;
+        }
+        
+        const payload = {
+            best_idx: bestIdx,
+            worst_idx: worstIdx,
+            best_to_others: bestToOthers,
+            others_to_worst: others_to_worst,
+            alternatives_matrices: alternativesMatrices
+        };
+        
+        const saveBtn = document.querySelector(".wizard-actions button.btn-teal");
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Otimizando...`;
+        saveBtn.disabled = true;
+        
+        fetch("{{ url_for('evaluate_method', problem_id=problem.id) }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.href = res.redirect;
+            } else {
+                alert("Erro ao calcular: " + res.message);
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            }
+        })
+        .catch(err => {
+            alert("Erro na conexão ao enviar preferências BWM.");
+            console.error(err);
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        });
+    }
+    
+    window.onload = initBwmUi;
+</script>
+{% endblock %}

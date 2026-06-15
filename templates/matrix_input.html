@@ -1,0 +1,389 @@
+{% extends 'base.html' %}
+
+{% block title %}Matriz de Consequências — SAD Central{% endblock %}
+
+{% block content %}
+<div class="wizard-container">
+    <div class="wizard-steps-indicator">
+        <div class="wizard-step completed">1. Racionalidade</div>
+        <div class="wizard-line completed"></div>
+        <div class="wizard-step completed">2. Problemática</div>
+        <div class="wizard-line completed"></div>
+        <div class="wizard-step completed">3. Método</div>
+        <div class="wizard-line completed"></div>
+        <div class="wizard-step active">4. Matriz</div>
+    </div>
+    
+    <div class="glass-card wizard-card-full">
+        <div class="matrix-header-panel">
+            <div>
+                <h2 class="wizard-title">Passo 4: Matriz de Consequências</h2>
+                <p class="wizard-subtitle">Cadastre os critérios, alternativas e os valores de consequências físicas.</p>
+            </div>
+            <div class="import-export-panel">
+                <button type="button" class="btn btn-outline btn-sm" onclick="triggerFileInput()"><i class="fa-solid fa-file-import"></i> Importar CSV / XLS / XLSX</button>
+                <input type="file" id="file-import-input" style="display: none;" accept=".csv,.xlsx,.xls" onchange="handleFileImport(this)">
+                <a href="/download/template" class="template-link"><i class="fa-solid fa-download"></i> Baixar Modelo Excel</a>
+            </div>
+        </div>
+        
+        <div class="matrix-editor-grid">
+            <!-- Left Panel: Alternatives & Criteria Editors -->
+            <div class="editor-sidebar">
+                <div class="editor-section">
+                    <div class="section-title-btn">
+                        <h4>Alternativas</h4>
+                        <button type="button" class="btn-icon-add" onclick="addAlternativeRow()" title="Adicionar Alternativa"><i class="fa-solid fa-plus-circle"></i></button>
+                    </div>
+                    <div class="list-wrapper" id="alternatives-list">
+                        <!-- Alternatives list rows -->
+                    </div>
+                </div>
+                
+                <div class="editor-section mt-4">
+                    <div class="section-title-btn">
+                        <h4>Critérios</h4>
+                        <button type="button" class="btn-icon-add" onclick="addCriterionColumn()" title="Adicionar Critério"><i class="fa-solid fa-plus-circle"></i></button>
+                    </div>
+                    <div class="list-wrapper" id="criteria-list">
+                        <!-- Criteria list rows -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Panel: Consequence Grid -->
+            <div class="grid-content-panel">
+                <div class="table-responsive">
+                    <table class="matrix-table" id="consequences-grid-table">
+                        <thead>
+                            <tr id="grid-header-row">
+                                <th class="sticky-col">Alternativa</th>
+                                <!-- Dynamic criteria column headers -->
+                            </tr>
+                        </thead>
+                        <tbody id="grid-body">
+                            <!-- Dynamic consequence cells -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="wizard-actions mt-4">
+            <a href="{{ url_for('select_method', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+            <button type="button" class="btn btn-teal" onclick="submitMatrix()"><i class="fa-solid fa-save"></i> Salvar e Avançar <i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initial data injected from Flask backend
+    let criteria = [];
+    let alternatives = [];
+    let consequences = {}; // key: altId_critId -> value
+    
+    {% for c in criteria %}
+        criteria.push({ id: {{ c.id }}, name: "{{ c.name }}", type: "{{ c.criteria_type }}" });
+    {% endfor %}
+    
+    {% for a in alternatives %}
+        alternatives.push({ id: {{ a.id }}, name: "{{ a.name }}" });
+    {% endfor %}
+    
+    {% for key, val in conseq_grid.items() %}
+        consequences["{{ key[0] }}_{{ key[1] }}"] = {{ val }};
+    {% endfor %}
+    
+    // Auto-initialize with at least 3 alternatives and 3 criteria if empty
+    if (alternatives.length === 0) {
+        alternatives = [
+            { id: 1, name: "Alternativa A" },
+            { id: 2, name: "Alternativa B" },
+            { id: 3, name: "Alternativa C" }
+        ];
+    }
+    
+    if (criteria.length === 0) {
+        criteria = [
+            { id: 1, name: "Critério 1", type: "benefit" },
+            { id: 2, name: "Critério 2", type: "benefit" },
+            { id: 3, name: "Critério 3", type: "cost" }
+        ];
+    }
+    
+    let nextAltId = Math.max(...alternatives.map(a => a.id), 0) + 1;
+    let nextCritId = Math.max(...criteria.map(c => c.id), 0) + 1;
+    
+    // Renders the editors and the consequence grid
+    function renderMatrixEditor() {
+        renderSidebarLists();
+        renderGridTable();
+    }
+    
+    function renderSidebarLists() {
+        // Render alternatives list
+        const altContainer = document.getElementById("alternatives-list");
+        altContainer.innerHTML = "";
+        alternatives.forEach((alt, idx) => {
+            const row = document.createElement("div");
+            row.className = "list-row-item";
+            row.innerHTML = `
+                <input type="text" value="${alt.name}" onchange="updateAlternativeName(${alt.id}, this.value)" placeholder="Nome da alternativa">
+                <button type="button" class="btn-row-delete" onclick="removeAlternative(${alt.id})" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>
+            `;
+            altContainer.appendChild(row);
+        });
+        
+        // Render criteria list
+        const critContainer = document.getElementById("criteria-list");
+        critContainer.innerHTML = "";
+        criteria.forEach((crit, idx) => {
+            const row = document.createElement("div");
+            row.className = "list-row-item";
+            row.innerHTML = `
+                <input type="text" value="${crit.name}" onchange="updateCriterionName(${crit.id}, this.value)" placeholder="Nome do critério">
+                <select onchange="updateCriterionType(${crit.id}, this.value)">
+                    <option value="benefit" ${crit.type === "benefit" ? "selected" : ""}>Benefício</option>
+                    <option value="cost" ${crit.type === "cost" ? "selected" : ""}>Custo</option>
+                </select>
+                <button type="button" class="btn-row-delete" onclick="removeCriterion(${crit.id})" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>
+            `;
+            critContainer.appendChild(row);
+        });
+    }
+    
+    function renderGridTable() {
+        // Render headers
+        const headerRow = document.getElementById("grid-header-row");
+        headerRow.innerHTML = `<th class="sticky-col">Alternativa</th>`;
+        criteria.forEach(crit => {
+            const th = document.createElement("th");
+            th.innerHTML = `${crit.name} <span class="header-type">(${crit.type === 'benefit' ? 'Max' : 'Min'})</span>`;
+            headerRow.appendChild(th);
+        });
+        
+        // Render body rows
+        const gridBody = document.getElementById("grid-body");
+        gridBody.innerHTML = "";
+        
+        alternatives.forEach(alt => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td class="sticky-col font-medium">${alt.name}</td>`;
+            
+            criteria.forEach(crit => {
+                const td = document.createElement("td");
+                const key = `${alt.id}_${crit.id}`;
+                const val = consequences[key] !== undefined ? consequences[key] : 0.0;
+                td.innerHTML = `
+                    <input type="number" step="any" value="${val}" onchange="updateConsequence(${alt.id}, ${crit.id}, this.value)">
+                `;
+                tr.appendChild(td);
+            });
+            gridBody.appendChild(tr);
+        });
+    }
+    
+    // Actions
+    function addAlternativeRow() {
+        alternatives.push({ id: nextAltId, name: `Alternativa ${String.fromCharCode(65 + (alternatives.length % 26))}` });
+        nextAltId++;
+        renderMatrixEditor();
+    }
+    
+    function removeAlternative(id) {
+        if (alternatives.length <= 2) {
+            alert("O problema de decisão deve ter pelo menos duas alternativas.");
+            return;
+        }
+        alternatives = alternatives.filter(a => a.id !== id);
+        renderMatrixEditor();
+    }
+    
+    function updateAlternativeName(id, value) {
+        const alt = alternatives.find(a => a.id === id);
+        if (alt) alt.name = value;
+        renderMatrixEditor();
+    }
+    
+    function addCriterionColumn() {
+        criteria.push({ id: nextCritId, name: `Critério ${criteria.length + 1}`, type: "benefit" });
+        nextCritId++;
+        renderMatrixEditor();
+    }
+    
+    function removeCriterion(id) {
+        if (criteria.length <= 1) {
+            alert("O problema de decisão deve ter pelo menos um critério.");
+            return;
+        }
+        criteria = criteria.filter(c => c.id !== id);
+        renderMatrixEditor();
+    }
+    
+    function updateCriterionName(id, value) {
+        const crit = criteria.find(c => c.id === id);
+        if (crit) crit.name = value;
+        renderGridTable(); // No need to re-render sidebar input text
+    }
+    
+    function updateCriterionType(id, value) {
+        const crit = criteria.find(c => c.id === id);
+        if (crit) crit.type = value;
+        renderGridTable();
+    }
+    
+    function updateConsequence(altId, critId, value) {
+        const key = `${altId}_${critId}`;
+        consequences[key] = parseFloat(value) || 0.0;
+    }
+    
+    // File Imports
+    function triggerFileInput() {
+        document.getElementById("file-import-input").click();
+    }
+    
+    function handleFileImport(input) {
+        const file = input.files[0];
+        if (!file) return;
+        
+        const formData = new FormData();
+        formData.append("file", file);
+        
+        // Show loading state
+        const importBtn = document.querySelector(".import-export-panel button");
+        const originalText = importBtn.innerHTML;
+        importBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Processando...`;
+        importBtn.disabled = true;
+        
+        fetch("{{ url_for('import_matrix', problem_id=problem.id) }}", {
+            method: "POST",
+            body: formData
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                // Clear state
+                alternatives = [];
+                criteria = [];
+                consequences = {};
+                
+                // Populate criteria
+                res.criteria.forEach((c, idx) => {
+                    criteria.push({ id: idx + 1, name: c.name, type: c.type });
+                });
+                
+                // Populate alternatives
+                res.alternatives.forEach((name, idx) => {
+                    alternatives.push({ id: idx + 1, name: name });
+                });
+                
+                // Populate consequences
+                res.consequences.forEach((row, altIdx) => {
+                    row.forEach((val, critIdx) => {
+                        const key = `${altIdx + 1}_${critIdx + 1}`;
+                        consequences[key] = val;
+                    });
+                });
+                
+                nextAltId = alternatives.length + 1;
+                nextCritId = criteria.length + 1;
+                
+                renderMatrixEditor();
+                alert("Matriz importada com sucesso!");
+            } else {
+                alert("Erro ao importar: " + res.message);
+            }
+        })
+        .catch(err => {
+            alert("Erro na conexão ao importar arquivo.");
+            console.error(err);
+        })
+        .finally(() => {
+            importBtn.innerHTML = originalText;
+            importBtn.disabled = false;
+            input.value = ""; // Clear file input
+        });
+    }
+    
+    function downloadTemplate() {
+        // Creates a sample CSV template for download
+        const csvContent = "data:text/csv;charset=utf-8," 
+            + "Alternativa,Custo,Qualidade,Prazo\n"
+            + "Tipo,cost,benefit,benefit\n"
+            + "Empresa A,120000,8.5,15\n"
+            + "Empresa B,150000,9.0,10\n"
+            + "Empresa C,90000,7.0,20\n";
+            
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "modelo_matriz_decisao.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    
+    // Save to Database
+    function submitMatrix() {
+        // Collect consequences in list format
+        const conseqList = [];
+        let missingValues = false;
+        
+        alternatives.forEach(alt => {
+            criteria.forEach(crit => {
+                const key = `${alt.id}_${crit.id}`;
+                const val = consequences[key];
+                if (val === undefined) {
+                    missingValues = true;
+                }
+                conseqList.push({
+                    alternative_id: alt.id,
+                    criterion_id: crit.id,
+                    value: val !== undefined ? val : 0.0
+                });
+            });
+        });
+        
+        const payload = {
+            alternatives: alternatives,
+            criteria: criteria,
+            consequences: conseqList
+        };
+        
+        // Show saving state
+        const saveBtn = document.querySelector(".wizard-actions button");
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Salvando...`;
+        saveBtn.disabled = true;
+        
+        fetch("{{ url_for('consequence_matrix', problem_id=problem.id) }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.href = res.redirect;
+            } else {
+                alert("Erro ao salvar: " + res.message);
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            }
+        })
+        .catch(err => {
+            alert("Erro na conexão ao salvar os dados.");
+            console.error(err);
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        });
+    }
+    
+    // Boot
+    window.onload = renderMatrixEditor;
+</script>
+{% endblock %}

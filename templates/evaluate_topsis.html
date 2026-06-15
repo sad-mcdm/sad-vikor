@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}Avaliação TOPSIS — {{ config.SYSTEM_TITLE }}{% endblock %}
+
+{% block content %}
+<div class="evaluation-container">
+    <div class="evaluation-header">
+        <h1 class="page-title"><i class="fa-solid fa-sliders text-teal"></i> Elicitação de Pesos (TOPSIS)</h1>
+        <p class="page-subtitle">Atribua notas de relevância de 0 a 100 para cada critério. Os pesos serão normalizados automaticamente.</p>
+    </div>
+    
+    <div class="evaluation-grid">
+        <!-- Direct Weights Form -->
+        <div class="glass-card flex-grow-1">
+            <h3 class="section-title">Swing Weighting para TOPSIS</h3>
+            <p class="section-subtitle">Pense em mudar do pior nível para o melhor nível de cada critério. Atribua o valor 100 para o critério mais importante de trocar, e dê notas proporcionais para os outros.</p>
+            
+            <form id="topsis-form" class="mt-4">
+                <div class="sliders-list">
+                    {% for crit in criteria %}
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-name font-bold">{{ crit.name }}</span>
+                                <span class="slider-type">({{ 'Benefício' if crit.criteria_type == 'benefit' else 'Custo' }})</span>
+                            </div>
+                            <div class="slider-control">
+                                <input type="range" class="form-range" min="0" max="100" value="{{ problem.preferences.get('weights', {}).get(crit.id|string, 50) }}" id="range_{{ crit.id }}" oninput="updateRangeValue({{ crit.id }}, this.value)">
+                                <span class="range-display-badge" id="badge_{{ crit.id }}">{{ problem.preferences.get('weights', {}).get(crit.id|string, 50) }}</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="evaluation-actions mt-5">
+                    <a href="{{ url_for('consequence_matrix', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+                    <button type="button" class="btn btn-teal" onclick="submitTopsis()"><i class="fa-solid fa-square-poll-vertical"></i> Calcular e Ver Resultados</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Side Panel: Info -->
+        <div class="glass-card sidebar-panel-info">
+            <h4>Como funciona o TOPSIS?</h4>
+            <p>O método **TOPSIS** (Technique for Order of Preference by Similarity to Ideal Solution) avalia as alternativas com base na proximidade à solução ideal.</p>
+            <p>Ele calcula simultaneamente as distâncias geométricas (euclidianas) de cada opção em relação à **Solução Ideal Positiva** (SIP) e à **Solução Ideal Negativa** (SIN).</p>
+            <p>O resultado final é ordenado pelo coeficiente de proximidade relativa, priorizando alternativas mais próximas da ideal e mais distantes da pior.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function updateRangeValue(id, val) {
+        document.getElementById(`badge_${id}`).innerText = val;
+    }
+    
+    function submitTopsis() {
+        const weights = {};
+        {% for crit in criteria %}
+            weights["{{ crit.id }}"] = parseFloat(document.getElementById("range_{{ crit.id }}").value);
+        {% endfor %}
+        
+        const payload = {
+            weights: weights
+        };
+        
+        fetch("{{ url_for('evaluate_method', problem_id=problem.id) }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(res => {
+            if (res.success) {
+                window.location.href = res.redirect;
+            } else {
+                alert("Erro ao calcular: " + res.message);
+            }
+        });
+    }
+</script>
+{% endblock %}

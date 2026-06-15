@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Problemática — SAD Central{% endblock %}
+
+{% block content %}
+<div class="wizard-container">
+    <div class="wizard-steps-indicator">
+        <div class="wizard-step completed">1. Racionalidade</div>
+        <div class="wizard-line completed"></div>
+        <div class="wizard-step active">2. Problemática</div>
+        <div class="wizard-line"></div>
+        <div class="wizard-step">3. Método</div>
+        <div class="wizard-line"></div>
+        <div class="wizard-step">4. Matriz</div>
+    </div>
+    
+    <div class="glass-card wizard-card-full">
+        <h2 class="wizard-title">Passo 2: Defina a Problemática de Decisão</h2>
+        <p class="wizard-subtitle">Qual é o objetivo final do processo de apoio à decisão?</p>
+        
+        <form action="{{ url_for('select_problematic', problem_id=problem.id) }}" method="POST">
+            <div class="cards-selector-grid">
+                <!-- Choice (Escolha) -->
+                <label class="selector-card">
+                    <input type="radio" name="problematic" value="choice" checked>
+                    <div class="selector-card-content">
+                        <div class="selector-card-icon"><i class="fa-solid fa-trophy text-teal"></i></div>
+                        <h3>Escolha (Choice)</h3>
+                        <p>Identificar a melhor alternativa ou um grupo reduzido das melhores alternativas. O sistema destacará explicitamente a alternativa vencedora.</p>
+                    </div>
+                </label>
+                
+                <!-- Ranking (Ordenação) -->
+                <label class="selector-card">
+                    <input type="radio" name="problematic" value="ranking">
+                    <div class="selector-card-content">
+                        <div class="selector-card-icon"><i class="fa-solid fa-list-ol text-purple"></i></div>
+                        <h3>Ordenação (Ranking)</h3>
+                        <p>Classificar todas as alternativas em uma ordem decrescente de preferência, do primeiro ao último lugar.</p>
+                    </div>
+                </label>
+                
+                <!-- Sorting (Classificação) -->
+                <label class="selector-card disabled-card">
+                    <input type="radio" name="problematic" value="sorting" disabled>
+                    <div class="selector-card-content">
+                        <div class="selector-card-icon"><i class="fa-solid fa-boxes-stacked text-muted"></i></div>
+                        <h3>Classificação (Sorting)</h3>
+                        <p>Distribuir as alternativas em categorias pré-definidas (ex: Adequado, Neutro, Inadequado). <span class="badge badge-muted">Em breve</span></p>
+                    </div>
+                </label>
+                
+                <!-- Portfolio (Portfólio) -->
+                <label class="selector-card disabled-card">
+                    <input type="radio" name="problematic" value="portfolio" disabled>
+                    <div class="selector-card-content">
+                        <div class="selector-card-icon"><i class="fa-solid fa-briefcase text-muted"></i></div>
+                        <h3>Portfólio (Portfolio)</h3>
+                        <p>Selecionar um conjunto de alternativas viáveis sujeitas a restrições de recursos (orçamento, pessoal). <span class="badge badge-muted">Em breve</span></p>
+                    </div>
+                </label>
+            </div>
+            
+            <div class="wizard-actions">
+                <a href="{{ url_for('select_rationality', problem_id=problem.id) }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Voltar</a>
+                <button type="submit" class="btn btn-teal">Avançar <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
