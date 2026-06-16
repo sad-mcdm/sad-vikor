@@ -1,14 +1,14 @@
-# Nexus VIKOR — Otimização de Compromisso Multicritério
+# SAD VIKOR — Otimização de Compromisso Multicritério
 
-Este repositório é o módulo independente do ecossistema **NEXUS MCDM**, configurado para operar exclusivamente com o método **VIKOR**.
+Este repositório é o módulo independente do ecossistema **SAD MCDM**, configurado para operar exclusivamente com o método **VIKOR**.
 
 ---
 
 ## 🎨 Identidade Visual e Branding
-- **Nome Oficial:** Nexus VIKOR
+- **Nome Oficial:** SAD VIKOR
 - **Cores Oficiais:** Esmeralda (`#059669`) e Bronze (`#B45309`)
 - **Conceito Visual:** Curvas de utilidade social e arrependimento individual convergentes.
-- **Copyright:** Direitos Reservados © 2026 NEXUS-MCDM. Todos os direitos reservados.
+- **Copyright:** Direitos Reservados © 2026 SAD-MCDM. Todos os direitos reservados.
 
 ---
 

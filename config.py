@@ -35,17 +35,17 @@ class Config:
     
     # Mapping for Titles
     SYSTEM_TITLE_MAP = {
-        'central': 'NEXUS MCDM',
-        'smarts_smarter': 'Nexus SMARTS/SMARTER',
-        'ahp': 'Nexus AHP',
-        'bwm': 'Nexus BWM',
-        'macbeth': 'Nexus MACBETH',
-        'bwt': 'Nexus BWT',
-        'topsis': 'Nexus TOPSIS',
-        'vikor': 'Nexus VIKOR',
-        'electre': 'Nexus ELECTRE',
-        'promethee': 'Nexus PROMETHEE'
+        'central': 'SAD MCDM',
+        'smarts_smarter': 'SAD SMARTS/SMARTER',
+        'ahp': 'SAD AHP',
+        'bwm': 'SAD BWM',
+        'macbeth': 'SAD MACBETH',
+        'bwt': 'SAD BWT',
+        'topsis': 'SAD TOPSIS',
+        'vikor': 'SAD VIKOR',
+        'electre': 'SAD ELECTRE',
+        'promethee': 'SAD PROMETHEE'
     }
     
-    SYSTEM_TITLE = SYSTEM_TITLE_MAP.get(SYSTEM_MODE, 'NEXUS MCDM')
+    SYSTEM_TITLE = SYSTEM_TITLE_MAP.get(SYSTEM_MODE, 'SAD MCDM')
 
