@@ -5,16 +5,16 @@ from config import Config
 from models import db, User, DecisionProblem, Alternative, Criterion, Consequence
 
 # Solvers
-from modules.smarts_smarter.engine import solve_smarts_smarter
-from modules.ahp.engine import solve_ahp
-from modules.macbeth.engine import solve_macbeth
-from modules.bwm.engine import solve_bwm
-from modules.bwt.engine import solve_bwt
-from modules.topsis.engine import solve_topsis
-from modules.vikor.engine import solve_vikor
-from modules.electre.engine import solve_electre
-from modules.promethee.engine import solve_promethee
-from services.monte_carlo import run_monte_carlo
+from sad_mcdm.smarts_smarter.engine import solve_smarts_smarter
+from sad_mcdm.ahp.engine import solve_ahp
+from sad_mcdm.macbeth.engine import solve_macbeth
+from sad_mcdm.bwm.engine import solve_bwm
+from sad_mcdm.bwt.engine import solve_bwt
+from sad_mcdm.topsis.engine import solve_topsis
+from sad_mcdm.vikor.engine import solve_vikor
+from sad_mcdm.electre.engine import solve_electre
+from sad_mcdm.promethee.engine import solve_promethee
+from sad_mcdm.services.monte_carlo import run_monte_carlo
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -746,12 +746,13 @@ def generate_results_pdf(problem_id):
     
     # Generate PDF Report
     import io
-    from services.pdf_generator import generate_results_report_pdf
+    from sad_mcdm.services.pdf_generator import generate_results_report_pdf
     
     output = io.BytesIO()
     system_mode = app.config.get('SYSTEM_MODE', 'central')
     
-    generate_results_report_pdf(output, problem, criteria, results_list, res, system_mode)
+    static_dir = os.path.join(app.root_path, 'static')
+    generate_results_report_pdf(output, problem, criteria, results_list, res, system_mode, static_dir=static_dir)
     output.seek(0)
     
     filename = f"relatorio_decisao_{problem.id}.pdf"

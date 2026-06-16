@@ -2,16 +2,16 @@ import numpy as np
 import math
 
 # Import solvers directly from packages
-from modules.smarts_smarter.engine import calculate_roc_weights, normalize_linear, solve_smarts_smarter
-from modules.ahp.engine import calculate_geometric_mean_weights, solve_ahp
-from modules.macbeth.engine import solve_macbeth_lp, get_macbeth_scores, solve_macbeth
-from modules.bwm.engine import solve_bwm_weights_lp, solve_bwm
-from modules.bwt.engine import solve_bwt_weights_lp, interpolate_bisection, solve_bwt
-from modules.topsis.engine import solve_topsis
-from modules.vikor.engine import solve_vikor
-from modules.electre.engine import solve_electre
-from modules.promethee.engine import solve_promethee
-from services.monte_carlo import run_monte_carlo
+from sad_mcdm.smarts_smarter.engine import calculate_roc_weights, normalize_linear, solve_smarts_smarter
+from sad_mcdm.ahp.engine import calculate_geometric_mean_weights, solve_ahp
+from sad_mcdm.macbeth.engine import solve_macbeth_lp, get_macbeth_scores, solve_macbeth
+from sad_mcdm.bwm.engine import solve_bwm_weights_lp, solve_bwm
+from sad_mcdm.bwt.engine import solve_bwt_weights_lp, interpolate_bisection, solve_bwt
+from sad_mcdm.topsis.engine import solve_topsis
+from sad_mcdm.vikor.engine import solve_vikor
+from sad_mcdm.electre.engine import solve_electre
+from sad_mcdm.promethee.engine import solve_promethee
+from sad_mcdm.services.monte_carlo import run_monte_carlo
 
 def test_smarter_weights():
     print("Testing SMARTER weights...")
